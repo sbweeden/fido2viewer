@@ -1,0 +1,152 @@
+<html>
+<head>
+	<!--
+		Open source dependencies - thanks to all the open-source contributors! 
+		The included dependencies are as originally sourced, and include the licenses published with each piece code.
+	--> 
+	<script src = "https://code.jquery.com/jquery-1.11.3.min.js"></script>
+
+	<!-- From https://kjur.github.io/jsrsasign/jsrsasign-latest-all-min.js -->
+	<script src = "./jsrsasign-latest-all-min.js"></script>
+
+	<!-- From https://github.com/paroga/cbor-js -->
+	<script src="./cbor.js"></script>
+
+	<!-- From https://lapo.it/asn1js/ -->
+	<script src="./hex.js"></script>
+	<script src="./base64.js"></script>
+	<script src="./oids.js"></script>
+	<script src="./int10.js"></script>
+	<script src="./asn1.js"></script>
+
+	<!--
+	  A minor custom mod to the CBOR library needed to deal with CBOR objects that
+	  are part of byte arrays that continue beyond the CBOR object being decoded.
+	--> 
+	<script type="text/javascript" src="./cbormods.js"></script>
+
+	<!--
+		The implementation of FIDO2-specific parsing functions
+	-->
+	<script type="text/javascript" src="./fidotools.js"></script>
+
+	<!--
+		Test data set population - feel free to extend this with your own collected data.
+	-->
+	<script type="text/javascript">
+
+		var testAttestationData = [
+			{ 
+				"label": "Valid: Mac Touchbar on verify.securitypoc.com",
+				"value": {
+					"id": "AJNjbWkYxEupGF_UEFamwmsjWLHhaJv2CRRbvvgS3Xab7AL0MhrDNB9doLwsYCatKuVNooiSeRM7C8ExcJwBppNagxd9X2l3AVBXDespqNLqnO0T5dQeg4Ujp0WFMRF_7sM",
+					"rawId": "AJNjbWkYxEupGF_UEFamwmsjWLHhaJv2CRRbvvgS3Xab7AL0MhrDNB9doLwsYCatKuVNooiSeRM7C8ExcJwBppNagxd9X2l3AVBXDespqNLqnO0T5dQeg4Ujp0WFMRF_7sM",
+					"response": {
+						"clientDataJSON": "eyJjaGFsbGVuZ2UiOiJaSGRzeUR6Znk1d0Zha3JTTGtpMTB6MjVZeGN6OXZtSkFuUFUxQ2lWd25zIiwib3JpZ2luIjoiaHR0cHM6Ly92ZXJpZnkuc2VjdXJpdHlwb2MuY29tIiwidHlwZSI6IndlYmF1dGhuLmNyZWF0ZSJ9",
+						"attestationObject": "o2NmbXRmcGFja2VkZ2F0dFN0bXSiY2FsZyZjc2lnWEgwRgIhANp2FPakwSdPJP6hMxJZnIGUEwfZCYgeQZfARZ6jB-p0AiEA-kZYBCOV9EcMlcMtnQJQe5xGfouqQs6UKjUxY3Hxz9JoYXV0aERhdGFY5qohvnY0ilTcDIBlNsNuQEvKBELDnDng5W-sGSkGHth3RV1yFTitzgACNbzGCmSLCyXx8FUDAGIAk2NtaRjES6kYX9QQVqbCayNYseFom_YJFFu--BLddpvsAvQyGsM0H12gvCxgJq0q5U2iiJJ5EzsLwTFwnAGmk1qDF31faXcBUFcN6ymo0uqc7RPl1B6DhSOnRYUxEX_uw6UBAgMmIAEhWCCiTdcTw20_0iRxTyymzGaF2zPi4siw0Q42uG3klcSZ5yJYIBng68JPd3SdfrKtHn0uX52KYso24eX3eAR_f9C1v2c_"
+					},
+					"getClientExtensionResults": {}
+				}
+			}
+		];
+
+		var testAssertionData = [
+			{
+				"label": "Valid: For Mac Touchbar on verify.securitypoc.com",
+				"value": {"id":"AJNjbWkYxEupGF_UEFamwmsjWLHhaJv2CRRbvvgS3Xab7AL0MhrDNB9doLwsYCatKuVNooiSeRM7C8ExcJwBppNagxd9X2l3AVBXDespqNLqnO0T5dQeg4Ujp0WFMRF_7sM","rawId":"AJNjbWkYxEupGF_UEFamwmsjWLHhaJv2CRRbvvgS3Xab7AL0MhrDNB9doLwsYCatKuVNooiSeRM7C8ExcJwBppNagxd9X2l3AVBXDespqNLqnO0T5dQeg4Ujp0WFMRF_7sM","type":"public-key","response":{"clientDataJSON":"eyJjaGFsbGVuZ2UiOiJBOTRCUllFX3k3UW9OUWs4MEhaaElQOVN1a0lzdjBkYWdsX0FlT2ZfYW5VIiwiZXh0cmFfa2V5c19tYXlfYmVfYWRkZWRfaGVyZSI6ImRvIG5vdCBjb21wYXJlIGNsaWVudERhdGFKU09OIGFnYWluc3QgYSB0ZW1wbGF0ZS4gU2VlIGh0dHBzOi8vZ29vLmdsL3lhYlBleCIsIm9yaWdpbiI6Imh0dHBzOi8vdmVyaWZ5LnNlY3VyaXR5cG9jLmNvbSIsInR5cGUiOiJ3ZWJhdXRobi5nZXQifQ","authenticatorData":"qiG-djSKVNwMgGU2w25AS8oEQsOcOeDlb6wZKQYe2HcFXXIVyQ","signature":"MEQCIHyETTdXRBd_n-lz0KgSNPHnnUXsZn6DSNpASP02zBzMAiB-cL7DC1fj2abI4REZLALNH3OXYg733gvEZhoe8h1JNw","userHandle":"CQCyJxquTxq2j1aiIbcdSw"},"getClientExtensionResults":{}},
+				"publicKey": {
+				  "1": 2,
+				  "3": -7,
+				  "-1": 1,
+				  "-2": [162,77,215,19,195,109,63,210,36,113,79,44,166,204,102,133,219,51,226,226,200,176,209,14,54,184,109,228,149,196,153,231],
+				  "-3": [25,224,235,194,79,119,116,157,126,178,173,30,125,46,95,157,138,98,202,54,225,229,247,120,4,127,127,208,181,191,103,63]
+				}
+			}
+		];
+	</script>
+
+	<!--
+		Set of functions used to call the tools and perform the HTML rendering used in this page
+	-->
+	<script type="text/javascript" src="./fidoviewer.js"></script>
+
+	<!-- CSS -->
+	<style>
+		.titleClass {
+			font-family: Georgia, serif;
+			color: blue;
+			font-size: 30px;
+			text-decoration: underline;
+		}
+
+		.dataHeading {
+			font-family: Georgia, serif;
+			font-size: 25px;
+		}
+
+		.dataHeadingSuccess {
+			font-family: Georgia, serif;
+			color: #32CD32;
+			font-size: 25px;
+		}
+
+		.dataHeadingError {
+			font-family: Georgia, serif;
+			color: #FF9033;
+			font-size: 25px;
+		}
+
+		.dataTextArea {
+			font-family: "Lucida Console", Monaco, monospace;
+		}
+
+		.dataTextAreaError {
+			color: red;
+		}
+	</style>	
+</head>
+<body onload="onLoad()">
+	<a class="titleClass" onclick="$('#attestationDiv').toggle()">Attestation Verifier</a>
+	<div id="attestationDiv" style="display:none">
+		<h3>Input what you have of the attestation payload:</h3>
+		<div id="testAttestationSelectDiv"></div>
+		<input type="button" value="Populate test data" onclick="testAttestation()" />
+		<br />
+		<table id="attestationInputTable" border="0">
+			<tr><td>id</td><td><input type="text" id="attestationId" size="100" /></td></tr>
+			<tr><td>rawId</td><td><input type="text" id="attestationRawId" size="100" /></td></tr>
+			<tr><td>type</td><td><input type="text" id="attestationType" size="12" value="public-key" readonly="true" /></td></tr>
+			<tr><td>response.clientDataJSON</td><td><input type="text" id="attestationClientDataJSON" size="120" /></td></tr>
+			<tr><td>response.attestationObject</td><td><input type="text" id="attestationAttestationObject" size="120" /></td></tr>
+			<tr><td>getClientExtensionResults</td><td><input type="text" id="attestationGetClientExtensionResults" size="50" value="{}" /></td></tr>
+		</table>
+		<input type="button" value="Process Attestation Fields" onclick="processAttestation()" />
+	</div>
+	<br>
+	<a class="titleClass" onclick="$('#assertionDiv').toggle()">Assertion Verifier</a>
+	<div id="assertionDiv" style="display:none">
+		<h3>Input what you have of the assertion payload:</h3>
+		<div id="testAssertionSelectDiv"></div>
+		<input type="button" value="Populate test data" onclick="testAssertion()" />
+		<br />
+		<table id="assertionInputTable" border="0">
+			<tr><td>id</td><td><input type="text" id="assertionId" size="100" /></td></tr>
+			<tr><td>rawId</td><td><input type="text" id="assertionRawId" size="100" /></td></tr>
+			<tr><td>type</td><td><input type="text" id="assertionType" size="12" value="public-key" readonly="true" /></td></tr>
+			<tr><td>response.clientDataJSON</td><td><input type="text" id="assertionClientDataJSON" size="120" /></td></tr>
+			<tr><td>response.authenticatorData</td><td><input type="text" id="assertionAuthenticatorData" size="120" /></td></tr>
+			<tr><td>response.signature</td><td><input type="text" id="assertionSignature" size="120" /></td></tr>
+			<tr><td>response.userHandle</td><td><input type="text" id="assertionUserHandle" size="120" /></td></tr>
+			<tr><td>getClientExtensionResults</td><td><input type="text" id="assertionGetClientExtensionResults" size="50" value="{}" /></td></tr>
+			<tr />
+			<tr><td colspan="2">If you have the COSE public key for signature validation, paste it below:</td></tr>
+			<tr><td colspan="2"><textarea id="assertionCOSEPublicKeyTextArea" class="dataTextArea" rows="8" cols="50" wrap="off"></textarea></td></tr>
+		</table>
+		<input type="button" value="Process Assertion Fields" onclick="processAssertion()" />
+	</div>
+	<br>
+	<h2>Details</h2>
+	<input type="button" value="Clear Details" onclick="updateMsg('')" />
+	<div id="detailsDiv" style="display:none">
+	</div></body>
+</html>
