@@ -96,9 +96,9 @@ Click on Process Assertion Fields and you should see a detailed breakdown of the
 
 Some other things to note:
 
-There are a couple of sample test datasets built into the tool that you can populate the verifiers with if you don't have your own - just to see how it works. I have used the data shown in this README as one of the test datasets.
-If you don't have all the fields available for one of the verifiers (say you only want to inspect the attestationObject but don't have the clientDataJSON), the tool will still work, and show you the unpacked data for as many of the fields as you can provide.
-This tool makes use of several other open source libraries, and those libraries and their licenses are embedded in this repository so the tool works standalone when you clone the repository without cross-origin read blocking issues. The HTML head section of fido2viewer.html lists all of the open source libraries that were used, and the location that the files originally came from. I'd like to acknowledge and thank the authors of those libraries, as without them building this FIDO2 viewer would have been much more work.
+* There are a couple of sample test datasets built into the tool that you can populate the verifiers with if you don't have your own - just to see how it works. I have used the data shown in this README as one of the test datasets.
+* If you don't have all the fields available for one of the verifiers (say you only want to inspect the attestationObject but don't have the clientDataJSON), the tool will still work, and show you the unpacked data for as many of the fields as you can provide.
+* This tool makes use of several other open source libraries, and those libraries and their licenses are embedded in this repository so the tool works standalone when you clone the repository without cross-origin read blocking issues. The HTML head section of fido2viewer.html lists all of the open source libraries that were used, and the location that the files originally came from. I'd like to acknowledge and thank the authors of those libraries, as without them building this FIDO2 viewer would have been much more work.
 
 
 
