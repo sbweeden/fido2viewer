@@ -861,7 +861,7 @@
 											for (var i = 0; i < x5c.length; i++) {
 												attStmtx5c.push(bytesFromArray(x5c[i], 0, -1));
 											}
-			
+
 											// verification procedure
 			
 											/* 
@@ -906,23 +906,29 @@
 												/*
 												 * part 5 of verification procedure: build verificationData
 												 */
-												var verificationData = [ 0x00 ].concat(
-														rpidhashBytes, clientDataHashBytes,
-														credentialId, publicKeyU2F);
-			
-												// finally, let's verify the signature
-												result.success = verifyFIDOSignature(
-														verificationData, attCert,
-														attStmtSigBytes, null);
-			
-												if (result.success) {
-													result["attestationType"] = "Basic";
-													result["attestationTrustPath"] = attStmtx5c;
-													result["aaguid"] = aaguid;
-													result["credentialId"] = credentialId;
-													result["credentialPublicKey"] = credentialPublicKey;
-													result["format"] = attestationObject["fmt"];
-													result["error"] = null;
+												if (clientDataHashBytes != null && clientDataHashBytes.length > 0) {
+													var verificationData = [ 0x00 ].concat(
+															rpidhashBytes, clientDataHashBytes,
+															credentialId, publicKeyU2F);
+				
+													// finally, let's verify the signature
+													result.success = verifyFIDOSignature(
+															verificationData, attCert,
+															attStmtSigBytes, null);
+				
+													if (result.success) {
+														result["attestationType"] = "Basic";
+														result["attestationTrustPath"] = attStmtx5c;
+														result["aaguid"] = aaguid;
+														result["credentialId"] = credentialId;
+														result["credentialPublicKey"] = credentialPublicKey;
+														result["format"] = attestationObject["fmt"];
+														result["error"] = null;
+													} else {
+														result["error"] = "Unable to validate fido-u2f signature";
+													}
+												} else {
+													result["error"] = "Not enough information to perform fido-u2f signature validation";
 												}
 											} else {
 												result["error"] = "Public key algorithm in attestation certificate is invalid";
@@ -1010,44 +1016,48 @@
 							// ECDSA256 - we know how to deal with that
 	
 							// validate signature
-							var verificationData = unpackedAuthData["rawBytes"]
-									.concat(clientDataHashBytes);
-							debugLog("about to perform ECDSA signature check");
-							if (verifyFIDOSignature(verificationData, x5c[0], sig, alg)) {
-								debugLog("ECDSA signature check OK!");
-								// verify x5c requirements per
-								// https://www.w3.org/TR/webauthn/#packed-attestation-cert-requirements
-								if (verifyPackedAttestationCertificateRequirements(x5c[0])) {
-									// check cert for extension with OID
-									// 1.3.6.1.4.1.45724.1.1.4
-									if (packedAttestationOIDCheck(x5c[0],
-											unpackedAuthData)) {
-										//
-										// not sure what to do with
-										// credentialPublicKey since there I cannot
-										// find any
-										// validation rules as to what to do with
-										// unpackedAuthData["attestedCredData"]["credentialPublicKey"]
-										//
-										var credentialPublicKey = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
-										
-										// done!
-										result["success"] = true;
-										result["attestationType"] = "Basic";
-										result["attestationTrustPath"] = x5c;
-										result["aaguid"] = unpackedAuthData["attestedCredData"]["aaguid"];
-										result["credentialId"] = unpackedAuthData["attestedCredData"]["credentialId"];
-										result["credentialPublicKey"] = credentialPublicKey;
-										result["format"] = attestationObject["fmt"];
-										result["error"] = null;
+							if (clientDataHashBytes != null && clientDataHashBytes.length > 0) {
+								var verificationData = unpackedAuthData["rawBytes"]
+										.concat(clientDataHashBytes);
+								debugLog("about to perform ECDSA signature check");
+								if (verifyFIDOSignature(verificationData, x5c[0], sig, alg)) {
+									debugLog("ECDSA signature check OK!");
+									// verify x5c requirements per
+									// https://www.w3.org/TR/webauthn/#packed-attestation-cert-requirements
+									if (verifyPackedAttestationCertificateRequirements(x5c[0])) {
+										// check cert for extension with OID
+										// 1.3.6.1.4.1.45724.1.1.4
+										if (packedAttestationOIDCheck(x5c[0],
+												unpackedAuthData)) {
+											//
+											// not sure what to do with
+											// credentialPublicKey since there I cannot
+											// find any
+											// validation rules as to what to do with
+											// unpackedAuthData["attestedCredData"]["credentialPublicKey"]
+											//
+											var credentialPublicKey = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
+											
+											// done!
+											result["success"] = true;
+											result["attestationType"] = "Basic";
+											result["attestationTrustPath"] = x5c;
+											result["aaguid"] = unpackedAuthData["attestedCredData"]["aaguid"];
+											result["credentialId"] = unpackedAuthData["attestedCredData"]["credentialId"];
+											result["credentialPublicKey"] = credentialPublicKey;
+											result["format"] = attestationObject["fmt"];
+											result["error"] = null;
+										} else {
+											result["error"] = "packed attestation certificate did not oid check";
+										}
 									} else {
-										result["error"] = "packed attestation certificate did not oid check";
+										result["error"] = "packed attestation certificate did not satisfy requirements";
 									}
 								} else {
-									result["error"] = "packed attestation certificate did not satisfy requirements";
+									result["error"] = "packed attestation signature validation failed";
 								}
 							} else {
-								result["error"] = "packed attestation signature validation failed";
+								result["error"] = "packed attestation not enough information to perform signature validation";
 							}
 						} else {
 							// signature algorithm not supported by this implementation
@@ -1069,21 +1079,25 @@
 								// Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash using the credential public key with alg.
 								if (GLOBALPOLICY.supportedPackedAttestationAlgorithms.indexOf(alg) >= 0) {
 									// validate signature
-									var verificationData = unpackedAuthData["rawBytes"]
-											.concat(clientDataHashBytes);
-									if (verifyFIDOSignature(verificationData, credentialPublicKey, sig, alg)) {
+									if (clientDataHashBytes != null && clientDataHashBytes.length > 0) {
+										var verificationData = unpackedAuthData["rawBytes"]
+												.concat(clientDataHashBytes);
+										if (verifyFIDOSignature(verificationData, credentialPublicKey, sig, alg)) {
 
-										// all ok
-										result["success"] = true;
-										result["attestationType"] = "Self";
-										result["attestationTrustPath"] = [];
-										result["aaguid"] = unpackedAuthData["attestedCredData"]["aaguid"];
-										result["credentialId"] = unpackedAuthData["attestedCredData"]["credentialId"];
-										result["credentialPublicKey"] = credentialPublicKey;
-										result["format"] = attestationObject["fmt"];
-										result["error"] = null;
+											// all ok
+											result["success"] = true;
+											result["attestationType"] = "Self";
+											result["attestationTrustPath"] = [];
+											result["aaguid"] = unpackedAuthData["attestedCredData"]["aaguid"];
+											result["credentialId"] = unpackedAuthData["attestedCredData"]["credentialId"];
+											result["credentialPublicKey"] = credentialPublicKey;
+											result["format"] = attestationObject["fmt"];
+											result["error"] = null;
+										} else {
+											result["error"] = "packed self attestation signature validation failed";
+										}
 									} else {
-										result["error"] = "packed self attestation signature validation failed";
+										result["error"] = "packed self attestation not enough information to perform signature validation";
 									}
 								} else {
 									// signature algorithm not supported by this implementation
