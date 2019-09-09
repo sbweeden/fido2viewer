@@ -14,14 +14,14 @@ Here is an example of use...
 
 Using a Chrome browser, with network inspector open, I captured a registration results payload of a FIDO2 registration with a Yubikey to the IBM demonstration site for FIDO2, https://verify.securitypoc.com, as shown:
 
-![Capture registration results](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen1.jpg)
+![Capture registration results](readme_images/screen1.jpg)
 
 Note that while this payload was captured from the IBM demonstration site, most FIDO2 server sites use the same type of payload encoding and field names - based on the non-normative FIDO2 server specification found here: https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html
 
 
 Take the JSON of the message payload:
 
-![Extract JSON of result payload](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen2.jpg)
+![Extract JSON of result payload](readme_images/screen2.jpg)
 
 Tidying up the formatting allows us to see the payload fields more easily:
 
@@ -42,12 +42,12 @@ Tidying up the formatting allows us to see the payload fields more easily:
 
 Fields from the result payload can be pasted directly into the attestation viewer as shown:
 
-![Paste the result payload fields into the Attestation Verifier](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen3.jpg)
+![Paste the result payload fields into the Attestation Verifier](readme_images/screen3.jpg)
 
 
 Then just press the Process Attestation Fields button, and the details section of the page will be filled with a breakdown of the parsed information:
 
-![Details of the attestation](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen4.jpg)
+![Details of the attestation](readme_images/screen4.jpg)
 
 
 To follow up with how the Assertion Verifier works, at this point take not of the COSE Key that the Attestation Viewer displayed, as we will use this later. From my capture, the COSE Key is found in the Decoded Authenticator Data section:
@@ -65,7 +65,7 @@ To follow up with how the Assertion Verifier works, at this point take not of th
 
 Now performing an assertion operation on the IBM demonstration site using this authenticator, I captured assertion results (you can do this with the Test Device feature shown) in the network inspector of the browser:
 
-![Capturing an assertion results payload](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen5.jpg)
+![Capturing an assertion results payload](readme_images/screen5.jpg)
 
 Extracted from the browser network inspector and formatted, the assertion results payload looks like:
 
@@ -87,12 +87,12 @@ Extracted from the browser network inspector and formatted, the assertion result
 
 The fields from this assertion results payload, along with the COSE Key from the previous attestation can be provide to the Assertion Verifier:
 
-![Paste the result payload fields into the Assertion Verifier](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen6.jpg)
+![Paste the result payload fields into the Assertion Verifier](readme_images/screen6.jpg)
 
 
 Click on Process Assertion Fields and you should see a detailed breakdown of the fields, and even the results of a signature validation check using the registered public key (COSE Key):
 
-![Details of the assertion](https://raw.githubusercontent.com/sbweeden/fido2viewer/master/readme_images/screen7.jpg)
+![Details of the assertion](readme_images/screen7.jpg)
 
 Some other things to note:
 
