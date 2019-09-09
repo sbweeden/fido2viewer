@@ -50,7 +50,7 @@ Then just press the Process Attestation Fields button, and the details section o
 ![Details of the attestation](readme_images/screen4.jpg)
 
 
-To follow up with how the Assertion Verifier works, at this point take not of the COSE Key that the Attestation Viewer displayed, as we will use this later. From my capture, the COSE Key is found in the Decoded Authenticator Data section:
+To follow up with how the Assertion Verifier works, at this point take note of the COSE Key that the Attestation Viewer displayed, as we will use this later. From my capture, the COSE Key is found in the Decoded Authenticator Data section:
 
 ```
 {
