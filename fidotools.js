@@ -9,7 +9,7 @@
 		/*
 		 * Supported attestation formats
 		 */
-		supportedAttestationFormats: [ "fido-u2f", "packed", "none", "tpm", "android-safetynet", "android-key" ],
+		supportedAttestationFormats: [ "fido-u2f", "packed", "none", "tpm", "android-safetynet", "android-key", "apple" ],
 		
 		/*
 		 * Supported packed attestation signature algorithms
@@ -2265,6 +2265,74 @@
 		return result;
 	}
 
+	function validateAttestationStatementApple(attestationObject,
+			unpackedAuthData, clientDataHashBytes) {
+		debugLog("validateAttestationStatementApple enter");
+		var result = {
+			"success" : false,
+			"attestationType" : null,
+			"attestationTrustPath" : null,
+			"aaguid" : null,
+			"error" : "Unknown Error validating Attestation Statement"
+		};
+
+		// see https://www.w3.org/TR/webauthn/#TBD
+		var valid = true;
+
+		// check attestation statement is present
+		var attStmt = attestationObject["attStmt"];
+		if (attStmt == null) {
+			valid = false;
+			result["error"] = "attStmt missing from attestationObject";
+		}
+
+		// get the alg
+		var alg = null;
+		if (valid) {
+			alg = attStmt["alg"];
+			if (alg == null) {
+				valid = false;
+				result["error"] = "Missing alg in attestation statement";
+			}
+			debugLog("Apple attestation statement alg: " + alg);
+		}
+
+		var x5c = [];
+		if (valid) {
+			// get x5c
+			if (attStmt["x5c"] != null && Array.isArray(attStmt["x5c"])) {
+				for (var i = 0; i < attStmt["x5c"].length; i++) {
+					x5c.push(bytesFromArray(attStmt["x5c"][i], 0, -1));
+				}
+			}
+
+			if (x5c.length <= 0) {
+				valid = false;
+				result["error"] = "Missing x5c in attestation statement";
+			}
+		}
+
+		// TODO - Find out how to verify an Apple attestation x5c
+
+		// If successful, return attestation type Basic with the attestation trust
+		// path set to the above attestation certificate.
+		if (valid) {
+			// done!
+			result["success"] = true;
+			result["attestationType"] = "Basic";
+			result["attestationTrustPath"] = x5c;
+			result["aaguid"] = unpackedAuthData["attestedCredData"]["aaguid"];
+			result["credentialId"] = unpackedAuthData["attestedCredData"]["credentialId"];
+			result["credentialPublicKey"] = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
+			result["format"] = attestationObject["fmt"];
+			result["error"] = null;
+		}
+
+		debugLog("validateAttestationStatementApple exit: "
+				+ JSON.stringify(result));
+		return result;
+	}
+
 	/**
 	 * Validates the attestation statement
 	 * 
@@ -2297,6 +2365,9 @@
 					unpackedAuthData, clientDataHashBytes);
 		} else if (attestationObject["fmt"] == "android-key") {
 			result = validateAttestationStatementAndroidKey(attestationObject,
+					unpackedAuthData, clientDataHashBytes);
+		} else if (attestationObject["fmt"] == "apple") {
+			result = validateAttestationStatementApple(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else {
 			result["error"] = "No implementation yet for validation of attestation format: "
