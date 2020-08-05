@@ -41,48 +41,6 @@ function clearMsg() {
 	$('#detailsMsgDiv').innerHTML = "";
 }
 
-function getPEMInfo(pemCert) {
-	var cert = new X509();
-	cert.readCertPEM(pemCert);
-	return cert.getInfo().replace(/(?:\r\n|\r|\n)/g, '<br>');
-}
-
-function getYubicoDescriptionTable(yubicoMetadata) {
-	var result = '<table border=1>' + 
-	'<tr><th>Description</th><th>Icon</th><th>Product Link</th></tr>';
-
-	yubicoMetadata.devices.forEach((d) => {
-		result += '<tr>' +
-			'<td>' + d.displayName + '</td>' + 
-			'<td><img src="' + d.imageUrl + '" style="max-height: 50px; max-width: 100px;" /></td>' +
-			'<td><a href="' + d.deviceUrl + '">' + d.deviceUrl + '</a></td>' +
-			'</tr>';
-	});
-
-	result += '</table>';
-	return result;
-}
-
-function populateMetadataTable() {
-	// delete any existing data table rows
-	$('metadataTable').find("tr:gt(0)").remove();
-
-	fidotools.allMetadata.forEach((e) => {
-		console.log("Processing entry: " + e.label);
-		$('#metadataTable')
-			.append('<tr>' +
-				'<td>' + e.label + '</td>' +
-				'<td>' + (e.type == "FIDO2_METADATA" ? e.value.description : 
-					(e.type == "PEM_CERT") ? getPEMInfo(e.value) : 
-						(e.type == "YUBICO" ? getYubicoDescriptionTable(e.value) : '')) + '</td>' + 
-				'<td>' + (e.type == "FIDO2_METADATA" ? '<img src="' + e.value.icon + '" style="max-height: 50px; max-width: 100px;" />' : 
-					(e.type == "PEM_CERT" ? '' : 
-						(e.type == "YUBICO" ? '<img src="' + e.value.vendorInfo.imageUrl + '" style="max-height: 50px; max-width: 100px;" />' : 
-							''))) + '</td>' +
-				'<td>' + e.type + '</td>'
-			);
-	});
-}
 
 function populateTestAttestationSelect() {
 	var selectHTML = 'Test data set:&nbsp;<select id="testAttestationIndex" name="testAttestationIndex">';
@@ -438,133 +396,6 @@ function appendAttestationStatement(decodedAttestationObject, clientDataHashByte
 		'<textarea id="attestationStatementTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1	) + '" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
-
-	// If the attestation statement validated and is not "None", add the metadata lookup information
-	if (attestationStatementValidationResult != null 
-		&& attestationStatementValidationResult.success 
-		&& attestationStatementValidationResult.attestationType != "None") {
-		appendMetadataLookup(attestationStatementValidationResult);
-	}
-}
-
-/*
-* This is a bit of a hack to reverse-lookup the end-user label view of metadata from the metadata service results
-*/
-function deriveMetadataSummary(s) {
-	var result = null;
-	for (var i = 0; i < fidotools.allMetadata.length && result == null; i++) {
-		// for a start, they have to be the same type of metadata
-		if (s.metadata.type == fidotools.allMetadata[i].type) {
-			if (s.metadata.type == "FIDO2_METADATA") {
-				// if this metadata AAGUID, must match
-				if (s.metadata["aaguid"] != null) {
-					if (fidotools.allMetadata[i].value["aaguid"] != null && fidotools.allMetadata[i].value["aaguid"] == s.metadata["aaguid"]) {
-						result = fidotools.allMetadata[i].label;
-					}
-				} else {
-					// if this metadata has aki, check if arrays matching
-					if (s.metadata["attestationCertificateKeyIdentifiers"] != null 
-						&& s.metadata["attestationCertificateKeyIdentifiers"].length > 0
-						&& fidotools.allMetadata[i].value["attestationCertificateKeyIdentifiers"] != null 
-						&& fidotools.allMetadata[i].value["attestationCertificateKeyIdentifiers"].length > 0
-						&& s.metadata["attestationCertificateKeyIdentifiers"].length == fidotools.allMetadata[i].value["attestationCertificateKeyIdentifiers"].length) {
-						var matching = true;
-						for (var j = 0; j < s.metadata["attestationCertificateKeyIdentifiers"].length && matching; j++) {
-							if (s.metadata["attestationCertificateKeyIdentifiers"][j] != fidotools.allMetadata[i].value["attestationCertificateKeyIdentifiers"][j]) {
-								matching = false;
-							}
-						}
-						if (matching) {
-							result = fidotools.allMetadata[i].label;
-						}
-					}
-				}
-			} else if (s.metadata.type == "PEM_CERT") {
-				// is this entry's PEM cert the same bytes as the candidate?
-				var sCert = new X509();
-				sCert.readCertPEM(s.caPEM);
-				var aCert = new X509();
-				aCert.readCertPEM(fidotools.allMetadata[i].value);
-				if (sCert.hex != null && aCert.hex != null && sCert.hex == aCert.hex) {
-					result = fidotools.allMetadata[i].label;
-				}
-			} else if (s.metadata.type == "YUBICO") {
-				// special case for yubico metadata - description is contained within
-				result = fidotools.allMetadata[i].label + ": " + s.metadata.displayName;
-			}
-		}
-	}
-
-	if (result == null) {
-		// shouldn't happen
-		result = "UNKNOWN - failed resolving metadata to label";
-	}
-
-	return result;
-}
-
-/*
-* Attempts to match the attestation statement validation result to one of our known metadata files
-* and validate the attestation trust path if supplied.
-*/
-function appendMetadataLookup(attestationStatementValidationResult) {
-	var txt = '';
-	var headingClass = 'dataHeadingSuccess';
-	var txtAreaClass = 'dataTextArea';
-
-
-	try {
-		var possibleMetadata = [];
-
-		// first we do a soft lookup assuming this might be a valid registration
-		var lookupReg = {
-			"aaguid": null,
-			"attTrustPath": [],
-		};
-		if (attestationStatementValidationResult.aaguid != null && attestationStatementValidationResult.aaguid.length > 0) {
-				lookupReg.aaguid = fidotools.aaguidBytesToUUID(attestationStatementValidationResult.aaguid).toUpperCase();
-			}
-			if (attestationStatementValidationResult.attestationTrustPath != null && attestationStatementValidationResult.attestationTrustPath.length > 0) {
-				attestationStatementValidationResult.attestationTrustPath.forEach((c) => {
-					lookupReg.attTrustPath.push(fidotools.certToPEM(c));
-				});
-			}
-
-			var linkedMetadata = fidotools.Fido2MetadataService.findMetadataForRegistration(lookupReg);
-			if (linkedMetadata != null) {
-				// caPEM field value not important for the summary lookup because this can't be a PEM_CERT entry
-				possibleMetadata.push({
-					"caPEM": "",
-					"metadata": linkedMetadata
-				});
-			} else {
-				// if soft lookup didn't work, at least get a candidate list of signers (e.g. PEM certs)
-				possibleMetadata = fidotools.Fido2MetadataService.selectPossibleAttestationSigners(attestationStatementValidationResult);
-			}
-
-			if (possibleMetadata == null || possibleMetadata.length == 0) {
-				txt += 'No matching metadata found\n';
-			} else {
-				var summary = [];
-				possibleMetadata.forEach((s) => {
-					summary.push(deriveMetadataSummary(s));
-				});
-				txt += 'Number of possible matching metadata: ' + possibleMetadata.length + '\n';
-				txt += 'Summary of possible matching metadata:' + myJSONStringify(summary) + '\n';
-			}
-	} catch (e) {
-		var errStr = exceptionToErrorString(e);
-		txt += "\n\nError resolving metadata: " + errStr + "\n";
-		headingClass = 'dataHeadingError';
-		txtAreaClass = "dataTextAreaError";
-	}
-
-	numLines = (txt.match(/\n/g) || []).length;
-
-	appendMsgRaw('<p class="'+headingClass+'">Metadata Lookup</p>' + 
-		'<textarea id="metadataLookupTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1	) + '" cols="150" wrap="off" readonly="true">' + 
-		txt + 
-		'</textarea><br />');
 }
 
 /*
@@ -616,33 +447,6 @@ function appendAttestationObject(s, clientDataHashBytes) {
 	}
 }
 
-function appendRegistrationResultSummary(s) {
-	var txt = '';
-	var headingClass = 'dataHeadingSuccess';
-	var txtAreaClass = 'dataTextArea';
-	try {
-		txt = myJSONStringify(s);
-		txt += "\n";
-	} catch (e) {
-		var errStr = exceptionToErrorString(e);
-		txt = "Unable to build registration summary: " + errStr + "\n";
-		headingClass = 'dataHeadingError';
-		txtAreaClass = "dataTextAreaError";
-	}
-
-	if (!s.valid) {
-		headingClass = 'dataHeadingError';
-		txtAreaClass = "dataTextAreaError";
-	}
-
-	numLines = (txt.match(/\n/g) || []).length;
-
-	appendMsgRaw('<p class="'+headingClass+'">Registration Summary</p>' + 
-		'<textarea id="registrationSummaryTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1) + '" cols="150" wrap="off" readonly="true">' + 
-		txt + 
-		'</textarea><br />');			
-}
-
 function appendSignatureCheck(sigBytes, cert, sig, alg) {
 
 	var headingClass = 'dataHeadingSuccess';
@@ -689,6 +493,7 @@ function appendSignatureCheck(sigBytes, cert, sig, alg) {
 		'<textarea id="signatureValidationTextArea" class="' + txtAreaClass + '" rows="'+(numLines+1)+'" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
+
 }
 
 function processAttestation() {
@@ -715,13 +520,6 @@ function processAttestation() {
 	// Add a pretty-print of the attestation object
 	if (attestationResult.response.attestationObject != null && attestationResult.response.attestationObject.length > 0) {
 		appendAttestationObject(attestationResult.response.attestationObject, clientDataHashBytes);
-	}
-
-	// try a complete registration verification process, and display the output
-	var registrationResult = fidotools.inspectConformanceToolAttestationResult(attestationResult);
-	if (registrationResult != null) {
-		convertArrayBuffersToByteArrays(registrationResult);
-		appendRegistrationResultSummary(registrationResult);
 	}
 }
 
@@ -789,8 +587,5 @@ function onLoad() {
 		selectHTML += '<option value="' + i + '">' + testAssertionData[i].label + '</option>';
 	}
 	selectHTML += '</select>';
-	$('#testAssertionSelectDiv').html(selectHTML);
-
-	// metadata
-	populateMetadataTable();
+	$('#testAssertionSelectDiv').html(selectHTML);			
 }
