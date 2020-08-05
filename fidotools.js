@@ -9,7 +9,7 @@
 		/*
 		 * Supported attestation formats
 		 */
-		supportedAttestationFormats: [ "fido-u2f", "packed", "none", "tpm", "android-safetynet", "android-key" ],
+		supportedAttestationFormats: [ "fido-u2f", "packed", "none", "tpm", "android-safetynet", "android-key", "apple" ],
 		
 		/*
 		 * Supported packed attestation signature algorithms
@@ -1962,8 +1962,23 @@
 			    "attestationRootCertificates": ["MIICgTCCAiegAwIBAgIJAKNkHlBjzS8oMAoGCCqGSM49BAMCMIGcMQswCQYDVQQGEwJVUzELMAkGA1UECAwCQ0ExETAPBgNVBAcMCFNhbiBKb3NlMRgwFgYDVQQKDA9TeW5hcHRpY3MsIEluYy4xDDAKBgNVBAsMA1BDRDEYMBYGA1UEAwwPU3luYXB0aWNzIENBIENBMSswKQYJKoZIhvcNAQkBFhxjZXJ0LWF1dGhvcml0eUBzeW5hcHRpY3MuY29tMB4XDTE5MDIxMjEzMTYxMloXDTI0MDIxMjEzMTYxMlowgZwxCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTERMA8GA1UEBwwIU2FuIEpvc2UxGDAWBgNVBAoMD1N5bmFwdGljcywgSW5jLjEMMAoGA1UECwwDUENEMRgwFgYDVQQDDA9TeW5hcHRpY3MgQ0EgQ0ExKzApBgkqhkiG9w0BCQEWHGNlcnQtYXV0aG9yaXR5QHN5bmFwdGljcy5jb20wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAStszEWIOUgs7seBAi7HydmAlCclXdGXtcJeTTzuoArZ1iaD287n8rtyRrXqaGAFzTaQSZmyQhaaIcvqJIt0frDo1AwTjAdBgNVHQ4EFgQUQxu2yTWBfh46W0aId+6O7hwYTI8wHwYDVR0jBBgwFoAUQxu2yTWBfh46W0aId+6O7hwYTI8wDAYDVR0TBAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiEAsMEpLAwOhVPAysPJZ2S7Y+GDj8YdhXsCnzhYtcYIIlcCIE0eqtSZSJ1aAHYdm3L2rOMuQTBSwUvA2B4DePMy6OCL"],
 			    "icon": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEEAAAA5CAYAAABphkbpAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOwQAADsEBuJFr7QAABB5JREFUaEPtmi+PVTEQxfkMWBQSh8ThcDgkDonCYrAYNAJPwgfYkCAwEILAQAgCQQIYBII1CMwjvwuzme2e3k772r6bwElOsvve3N72dP61u+d2/7GTIvz6cbz7dvR09/H+g4NTweZn+Pr4iXzW8/vLV3+tz+KUCAz+9vad3dH5Cwfls4uXlon//Pzl78z+gPnxOd9jZ99/uHvvzBiKNm6KExEY8PnlK/LhWbRJsliPdPFGWxBz95+X+Pr6jeU5w4kIL65ekw/MYG7xAFdPF++fM7AwZZMj3mNYROBFynAGmYxaPDEc8UzmDlrWYOG0iPDm5i1pNJLsXBrzgMXX7CpzN+Q8JsdPDx8tzy0i1LrSPmR3VaZGkNakbJ5U+7zllKki5OJeJb0a2o5SNtX3OU4VgaR7/O798kKPaNyXyPiGGjGniWAv8sAborU9ypaQGC4CO6JiH48Y0Y9YlagJiaEi4J4q9keWYjzAEA2JYSL4yXi0Zv4oWbgh+q4hIliW9sAjRuYcT0u+UY/rLoLFpAcCzGzHbQ68V32fsqsIWxAA+lCMvLubCFsRALIOQ6QEdxFhSwIYDZFSubcINkCKQxzGPO1QFskLe4ngT24eo8tghL5BKzVlzSIwMCqnIDSU/Wz6EC15ZbMIuVZY2R6CPkz5WdkYm0TwV1IGvGLEWaCVXgQ2TNkYq0WgLVVhcOhEmNKLUPLQahFUS1x7iTGDXgSgbIxVIvjDiQGviJ7WZjIVYS1Uq0RIBwa9L0V6MZ3r2tqqREhvhfld2W2BQ0SgBU6xhaYox1SEtbmGRUgH3bIXwLSPYf7KDoZFSAdt9QLeYRyZUIeIkCK6AOxInuqqnc9Gtdkp9hYhLY3RibP4tLGyvzCN9ALKYYq9ReBzj0goqDsGXjZy8UZ1ul3raJtEKC3E//eIYWYlUV1tbm2wWoRSH64mMFMAqPLP2i1XtQhr+cDbGWafK1Q+AMrWGBLBN0o8oGygumOYfbzG61KUepqQCNAQEcowqvytUW1EyRvDIlic5Wy2kAtyoVA65IVFsEXmbNQOzL5yV2UZlOYRFsFqb85GQdmNYs4LImecsAiQ7m+rIuS8AA9W9p5VIjBgjQil8XpRJWVDpDpVicCAufZTYdatk2qOAHlK2aesEgHmWmaVGEvdZQ+qqmSIemK1CDnmJjMyJFRjZIh6Aewmwlp2HnFyXBMA1KylmwhQhQQgLHoKURIgUhE8u4qQ8waAEPs2TwiZK4WGFsFPidAjmzPGGlhEpGylZPfVn/88+L5lbLv/WETodYNc2i3AixEs533sJuUY1y4tHmDT4mneexcRAK6hjGsZEaIXWgWAPo+diAB6CbFWw3uBHNASAnhaeg14SgRgt8ItL/DE3SPu3ILaKgDxGDZZzemMCP8edrvfUHYu/bKr1U0AAAAASUVORK5CYII="
 			}
-		}
-		
+		},
+		// Mockup of metadata using Apple WebAuthn CA
+		{
+			"label": "shane-madeup-apple-metadata.json",
+			"type": "FIDO2_METADATA",
+			"value": {
+				"description": "Apple WebAuthn Attestation",
+			    "protocolFamily": "fido2",
+			    "attestationRootCertificates": [
+			        "MIICEjCCAZmgAwIBAgIQaB0BbHo84wIlpQGUKEdXcTAKBggqhkjOPQQDAzBLMR8wHQYDVQQDDBZBcHBsZSBXZWJBdXRobiBSb290IENBMRMwEQYDVQQKDApBcHBsZSBJbmMuMRMwEQYDVQQIDApDYWxpZm9ybmlhMB4XDTIwMDMxODE4MjEzMloXDTQ1MDMxNTAwMDAwMFowSzEfMB0GA1UEAwwWQXBwbGUgV2ViQXV0aG4gUm9vdCBDQTETMBEGA1UECgwKQXBwbGUgSW5jLjETMBEGA1UECAwKQ2FsaWZvcm5pYTB2MBAGByqGSM49AgEGBSuBBAAiA2IABCJCQ2pTVhzjl4Wo6IhHtMSAzO2cv+H9DQKev3//fG59G11kxu9eI0/7o6V5uShBpe1u6l6mS19S1FEh6yGljnZAJ+2GNP1mi/YK2kSXIuTHjxA/pcoRf7XkOtO4o1qlcaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUJtdk2cV4wlpn0afeaxLQG2PxxtcwDgYDVR0PAQH/BAQDAgEGMAoGCCqGSM49BAMDA2cAMGQCMFrZ+9DsJ1PW9hfNdBywZDsWDbWFp28it1d/5w2RPkRX3Bbn/UbDTNLx7Jr3jAGGiQIwHFj+dJZYUJR786osByBelJYsVZd2GbHQu209b5RCmGQ21gpSAk9QZW4B1bWeT0vT"
+			    ],
+			    "attestationCertificateKeyIdentifiers": [
+			        "26d764d9c578c25a67d1a7de6b12d01b63f1c6d7"
+			    ],
+			    "icon": "https://www.apple.com/favicon.ico"
+			}
+		}		
 	]; // end allMetadata
 	
 	/*
@@ -5017,6 +5032,74 @@
 		return result;
 	}
 
+	function validateAttestationStatementApple(attestationObject,
+			unpackedAuthData, clientDataHashBytes) {
+		debugLog("validateAttestationStatementApple enter");
+		var result = {
+			"success" : false,
+			"attestationType" : null,
+			"attestationTrustPath" : null,
+			"aaguid" : null,
+			"error" : "Unknown Error validating Attestation Statement"
+		};
+
+		// see https://www.w3.org/TR/webauthn/#TBD
+		var valid = true;
+
+		// check attestation statement is present
+		var attStmt = attestationObject["attStmt"];
+		if (attStmt == null) {
+			valid = false;
+			result["error"] = "attStmt missing from attestationObject";
+		}
+
+		// get the alg
+		var alg = null;
+		if (valid) {
+			alg = attStmt["alg"];
+			if (alg == null) {
+				valid = false;
+				result["error"] = "Missing alg in attestation statement";
+			}
+			debugLog("Apple attestation statement alg: " + alg);
+		}
+
+		var x5c = [];
+		if (valid) {
+			// get x5c
+			if (attStmt["x5c"] != null && Array.isArray(attStmt["x5c"])) {
+				for (var i = 0; i < attStmt["x5c"].length; i++) {
+					x5c.push(bytesFromArray(attStmt["x5c"][i], 0, -1));
+				}
+			}
+
+			if (x5c.length <= 0) {
+				valid = false;
+				result["error"] = "Missing x5c in attestation statement";
+			}
+		}
+
+		// TODO - Find out how to verify an Apple attestation x5c
+
+		// If successful, return attestation type Basic with the attestation trust
+		// path set to the above attestation certificate.
+		if (valid) {
+			// done!
+			result["success"] = true;
+			result["attestationType"] = "Basic";
+			result["attestationTrustPath"] = x5c;
+			result["aaguid"] = unpackedAuthData["attestedCredData"]["aaguid"];
+			result["credentialId"] = unpackedAuthData["attestedCredData"]["credentialId"];
+			result["credentialPublicKey"] = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
+			result["format"] = attestationObject["fmt"];
+			result["error"] = null;
+		}
+
+		debugLog("validateAttestationStatementApple exit: "
+				+ JSON.stringify(result));
+		return result;
+	}
+
 	/**
 	 * Validates the attestation statement
 	 * 
@@ -5049,6 +5132,9 @@
 					unpackedAuthData, clientDataHashBytes);
 		} else if (attestationObject["fmt"] == "android-key") {
 			result = validateAttestationStatementAndroidKey(attestationObject,
+					unpackedAuthData, clientDataHashBytes);
+		} else if (attestationObject["fmt"] == "apple") {
+			result = validateAttestationStatementApple(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else {
 			result["error"] = "No implementation yet for validation of attestation format: "
