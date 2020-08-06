@@ -2265,10 +2265,42 @@
 		return result;
 	}
 
+	function parseAppleOIDExtension(asn1) {
+		let result = {};
+
+		/*
+		 * OID 1.2.840.113635.100.8.2 ::= SEQUENCE { nonce [1] EXPLICIT OCTET_STRING  }
+		 */
+
+		let tagMap = {
+			"[1]" : {
+				"tag" : "nonce",
+				"func" : parseOctetString
+			}
+		};
+
+		checkType(asn1, "SEQUENCE");
+
+		for (let i = 0; i < asn1.sub.length; i++) {
+			// what explicit type is this?
+			let typeName = asn1.sub[i].typeName();
+			// call the type-specific parsing function
+			debugLog("Processing attribute list explicit type: " + typeName);
+			if (tagMap[typeName] != null) {
+				result[tagMap[typeName].tag] = tagMap[typeName]
+						.func(asn1.sub[i].sub[0]);
+			} else {
+				throw ("ASN1 error in parseAppleOIDExtension. Received unknown explicit type: " + typeName);
+			}
+		}
+
+		return result;
+	}
+
 	function validateAttestationStatementApple(attestationObject,
 			unpackedAuthData, clientDataHashBytes) {
 		debugLog("validateAttestationStatementApple enter");
-		var result = {
+		let result = {
 			"success" : false,
 			"attestationType" : null,
 			"attestationTrustPath" : null,
@@ -2277,17 +2309,17 @@
 		};
 
 		// see https://www.w3.org/TR/webauthn/#TBD
-		var valid = true;
+		let valid = true;
 
 		// check attestation statement is present
-		var attStmt = attestationObject["attStmt"];
+		let attStmt = attestationObject["attStmt"];
 		if (attStmt == null) {
 			valid = false;
 			result["error"] = "attStmt missing from attestationObject";
 		}
 
 		// get the alg
-		var alg = null;
+		let alg = null;
 		if (valid) {
 			alg = attStmt["alg"];
 			if (alg == null) {
@@ -2297,7 +2329,7 @@
 			debugLog("Apple attestation statement alg: " + alg);
 		}
 
-		var x5c = [];
+		let x5c = [];
 		if (valid) {
 			// get x5c
 			if (attStmt["x5c"] != null && Array.isArray(attStmt["x5c"])) {
@@ -2312,7 +2344,93 @@
 			}
 		}
 
-		// TODO - Find out how to verify an Apple attestation x5c
+		// TODO - Double check if this is how to verify an Apple attestation x5c
+		
+		// Speculation based on information at https://developer.apple.com/documentation/devicecheck/validating_apps_that_connect_to_your_server
+		
+		// Verify that the public key in the first certificate in x5c matches the
+		// credentialPublicKey in the attestedCredentialData in authenticatorData.
+		let attestationCertPEM = null;
+		if (valid) {
+			debugLog("Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.");
+			attestationCertPEM = certToPEM(x5c[0]);
+			let attestationCert = new X509();
+			attestationCert.readCertPEM(attestationCertPEM);
+			let certPublicKey = attestationCert.getPublicKey();
+			let attestedPublicKey = coseKeyToPublicKey(unpackedAuthData["attestedCredData"]["credentialPublicKey"]);
+
+			// are these keys the same, and not null?
+			if (!(certPublicKey != null && certPublicKey["pubKeyHex"] != null
+					&& attestedPublicKey != null && attestedPublicKey["pubKeyHex"] && certPublicKey["pubKeyHex"] == attestedPublicKey["pubKeyHex"])) {
+				valid = false;
+				result["error"] = "Public key in the first certificate in x5c does not match the credentialPublicKey in the attestedCredentialData";
+			}
+		}
+
+		// Obtain the value of the credCert extension with OID 1.2.840.113635.100.8.2, which is a DER-encoded ASN.1 sequence. 
+		// Decode the sequence and extract the single octet string that it contains. Verify that the string equals nonce.
+		
+		// first build the nonce - which is sha256(authData + clientDataHash)
+		let verificationDataHash = sha256(unpackedAuthData["rawBytes"].concat(clientDataHashBytes));
+
+		
+		let oidInfo = null;
+		if (valid) {
+			debugLog("Checking attestation cert OID extension 1.2.840.113635.100.8.2....");
+			//
+			// get and parse the attestation extension represented by oid
+			// 1.2.840.113635.100.8.2
+			//
+			let x509Cert = new X509();
+			x509Cert.readCertPEM(attestationCertPEM);
+
+			debugLog("About to call x509Cert.getExtInfo");
+			oidInfo = x509Cert.getExtInfo("1.2.840.113635.100.8.2");
+
+			if (oidInfo == null) {
+				valid = false;
+				result["error"] = "Apple attestation certificate did not contain extension with oid: 1.2.840.113635.100.8.2";
+			}
+		}
+		
+		let tlv = null;
+		if (valid) {
+			debugLog("About to call ASN1HEX.getTLV");
+			tlv = ASN1HEX.getTLV(pemtohex(attestationCertPEM), oidInfo.vidx);
+			if (tlv == null) {
+				valid = false;
+				result["error"] = "Unable to parse certificate extension with oid: 1.2.840.113635.100.8.2";
+			}
+		}
+		
+		let oidResult = null;
+		if (valid) {
+			// tlv should be a SEQUENCE, with 1 tagged element which is an OCTET-STRING
+			debugLog("About to call ASN1.decode on hex tlv: " + tlv);
+			let asn1 = ASN1.decode(b64toBA(hextob64(tlv)));	
+			
+			if (asn1 == null || asn1["sub"] == null || !asn1["sub"].length == 1) {
+				valid = false;
+				result["error"] = "Invalid asn1 structure of attestation certificate oid: 1.2.840.113635.100.8.2";
+			}
+			
+			if (valid) {
+				oidResult = parseAppleOIDExtension(asn1);
+				
+				if (oidResult == null || oidResult["nonce"] == null) {
+					valid = false;
+					result["error"] = "Invalid fields in attestation certificate oid: 1.2.840.113635.100.8.2";
+				}
+			}
+		}
+			
+		if (valid) {
+			// compare the oid extension octet string with the verification data hash
+			if (!baEqual(oidResult.nonce, verificationDataHash)) {
+				valid = false;
+				result["error"] = "The octet string in certificate oid: 1.2.840.113635.100.8.2 did not match the verification data hash";
+			}
+		}
 
 		// If successful, return attestation type Basic with the attestation trust
 		// path set to the above attestation certificate.
