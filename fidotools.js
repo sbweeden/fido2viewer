@@ -2318,18 +2318,8 @@
 			result["error"] = "attStmt missing from attestationObject";
 		}
 
-		// get the alg
-		let alg = null;
-		if (valid) {
-			alg = attStmt["alg"];
-			if (alg == null) {
-				valid = false;
-				result["error"] = "Missing alg in attestation statement";
-			}
-			debugLog("Apple attestation statement alg: " + alg);
-		}
-
 		let x5c = [];
+		let attestationCertPEM = null;
 		if (valid) {
 			// get x5c
 			if (attStmt["x5c"] != null && Array.isArray(attStmt["x5c"])) {
@@ -2342,38 +2332,17 @@
 				valid = false;
 				result["error"] = "Missing x5c in attestation statement";
 			}
-		}
 
-		// TODO - Double check if this is how to verify an Apple attestation x5c
-		
-		// Speculation based on information at https://developer.apple.com/documentation/devicecheck/validating_apps_that_connect_to_your_server
-		
-		// Verify that the public key in the first certificate in x5c matches the
-		// credentialPublicKey in the attestedCredentialData in authenticatorData.
-		let attestationCertPEM = null;
-		if (valid) {
-			debugLog("Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.");
 			attestationCertPEM = certToPEM(x5c[0]);
-			let attestationCert = new X509();
-			attestationCert.readCertPEM(attestationCertPEM);
-			let certPublicKey = attestationCert.getPublicKey();
-			let attestedPublicKey = coseKeyToPublicKey(unpackedAuthData["attestedCredData"]["credentialPublicKey"]);
-
-			// are these keys the same, and not null?
-			if (!(certPublicKey != null && certPublicKey["pubKeyHex"] != null
-					&& attestedPublicKey != null && attestedPublicKey["pubKeyHex"] && certPublicKey["pubKeyHex"] == attestedPublicKey["pubKeyHex"])) {
-				valid = false;
-				result["error"] = "Public key in the first certificate in x5c does not match the credentialPublicKey in the attestedCredentialData";
-			}
 		}
 
-		// Obtain the value of the credCert extension with OID 1.2.840.113635.100.8.2, which is a DER-encoded ASN.1 sequence. 
-		// Decode the sequence and extract the single octet string that it contains. Verify that the string equals nonce.
-		
-		// first build the nonce - which is sha256(authData + clientDataHash)
+		// Verification based on https://github.com/w3c/webauthn/pull/1491
+
+		// build the nonce - which is sha256(authData + clientDataHash)
 		let verificationDataHash = sha256(unpackedAuthData["rawBytes"].concat(clientDataHashBytes));
 
-		
+		// Obtain the value of the credCert extension with OID 1.2.840.113635.100.8.2, which is a DER-encoded ASN.1 sequence. 
+		// Decode the sequence and extract the single octet string that it contains. Verify that the string equals nonce.		
 		let oidInfo = null;
 		if (valid) {
 			debugLog("Checking attestation cert OID extension 1.2.840.113635.100.8.2....");
@@ -2429,6 +2398,23 @@
 			if (!baEqual(oidResult.nonce, verificationDataHash)) {
 				valid = false;
 				result["error"] = "The octet string in certificate oid: 1.2.840.113635.100.8.2 did not match the verification data hash";
+			}
+		}
+
+		// Verify that the public key in the first certificate in x5c matches the
+		// credentialPublicKey in the attestedCredentialData in authenticatorData.
+		if (valid) {
+			debugLog("Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.");
+			let attestationCert = new X509();
+			attestationCert.readCertPEM(attestationCertPEM);
+			let certPublicKey = attestationCert.getPublicKey();
+			let attestedPublicKey = coseKeyToPublicKey(unpackedAuthData["attestedCredData"]["credentialPublicKey"]);
+
+			// are these keys the same, and not null?
+			if (!(certPublicKey != null && certPublicKey["pubKeyHex"] != null
+					&& attestedPublicKey != null && attestedPublicKey["pubKeyHex"] && certPublicKey["pubKeyHex"] == attestedPublicKey["pubKeyHex"])) {
+				valid = false;
+				result["error"] = "Public key in the first certificate in x5c does not match the credentialPublicKey in the attestedCredentialData";
 			}
 		}
 
