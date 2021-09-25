@@ -2163,13 +2163,19 @@
 			var x509Cert = new X509();
 			x509Cert.readCertPEM(attestationCertPEM);
 			var oidInfo = x509Cert.getExtInfo("1.3.6.1.4.1.11129.2.1.17");
-
-			var tlv = ASN1HEX.getTLV(pemtohex(attestationCertPEM), oidInfo.vidx);
-			
-			androidKeyAttestation = parseAndroidKeyAttestation(tlv);
-			if (androidKeyAttestation == null) {
+			if (oidInfo == null) {
 				valid = false;
-				result["error"] = "Unable to parse attestation certificate extension 1.3.6.1.4.1.11129.2.1.17";
+				result["error"] = "Android-key attestation certificate missing extension 1.3.6.1.4.1.11129.2.1.17";
+			}
+
+			if (valid) {
+				var tlv = ASN1HEX.getTLV(pemtohex(attestationCertPEM), oidInfo.vidx);
+				
+				androidKeyAttestation = parseAndroidKeyAttestation(tlv);
+				if (androidKeyAttestation == null) {
+					valid = false;
+					result["error"] = "Unable to parse android-key attestation certificate extension 1.3.6.1.4.1.11129.2.1.17";
+				}
 			}
 		}
 		
