@@ -229,11 +229,15 @@ function appendAuthData(ba) {
 			var flags = ba[32];
 			var userPresent = ((flags & 0x01) != 0x00);
 			var userVerified = ((flags & 0x04) != 0x00);
+			var backupEligibility = ((flags & 0x08) != 0x00);
+			var backupState = ((flags & 0x10) != 0x00);
 			var attestedCredentialData = ((flags & 0x40) != 0x00);
 			var extensionData = ((flags & 0x80) != 0x00);
 			txt += "FLAGS: 0x" + BAtohex([ flags ]) + "\n"
 			txt += "  User Present (UP): " + userPresent + "\n";
 			txt += "  User Verified (UV): " + userVerified + "\n";
+			txt += "  Backup Eligibility (BE): " + backupEligibility + "\n";
+			txt += "  Backup State (BS): " + backupState + "\n";
 			txt += "  Attested Credential Data (AT): " + attestedCredentialData + "\n";
 			txt += "  Extension Data (ED): " + extensionData + "\n";
 
