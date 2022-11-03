@@ -389,6 +389,23 @@
 		return result;
 	}
 	
+	// see table 6.4 of https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part2_Structures_pub.pdf
+	function tpmECCCurvetoCoseCurve(tpmCurveID) {
+		// default is no match
+		var result = -1;
+		if (tpmCurveID == 3) {
+			result = 1;
+		} else if (tpmCurveID == 4) {
+			result = 2;
+		} else if (tpmCurveID == 5) {
+			result = 3;
+		} else {
+			// we don't support it
+			result = -1;
+		}
+		return result;
+	}
+
 	function coseKeyToPublicKey(k) {
 		var result = null;
 
@@ -1126,6 +1143,7 @@
 	 * Unpack the public area bytes from a TPM attestation. Most of the information required
 	 * to do this was found here, which is a little sad because the TPM spec is undecipherable:
 	 * https://github.com/w3c/webauthn/issues/984
+	 * https://medium.com/webauthnworks/verifying-fido-tpm2-0-attestation-fc7243847498
 	 */
 	function unpackPublicArea(pubAreaBytes) {
 		var result = { "valid": true, "error": null };
@@ -1133,7 +1151,7 @@
 		// use data view to walk over the bytes
 		var pubAreaBA = bytesFromArray(pubAreaBytes, 0,-1);
 		result["rawBytes"] = pubAreaBA;
-		
+
 		var pubAreaArrayBuffer = (new Uint8Array(pubAreaBA)).buffer;
 		
 	    var dataview = new DataView(pubAreaArrayBuffer);
@@ -1142,10 +1160,10 @@
 	    // TPMI_ALG_PUBLIC type (2 bytes)
 	    result["type"] = dataview.getUint16(index);
 	    index += 2;
-	    // presently we only support TPM_ALG_RSA
-	    if (result["type"] != 0x0001 /* TPM_ALG_RSA */ ) {
+	    // presently we only support TPM_ALG_RSA and TPM_ALG_ECC
+	    if (result["type"] != 0x0001 /* TPM_ALG_RSA */ && result["type"] != 0x0023) {
 	    	result.valid = false;
-	    	result.error = "TPM attestation only supports TPM_ALG_RSA, not: " + result["type"]; 
+	    	result.error = "TPM attestation only supports TPM_ALG_RSA and TPM_ALG_ECC, not: " + result["type"]; 
 	    }
 	
 	    // TPMI_ALG_HASH nameAlg (2 bytes)
@@ -1167,10 +1185,12 @@
 		    index = szBytes["nextIndex"];
 	    }
 	
-	    // TPMU_PUBLIC_PARMS parameters (at this point assumes TPMS_RSA_PARAMS because type has been validated to TPM_ALG_RSA)
+	    // TPMU_PUBLIC_PARMS parameters 
 	    if (result.valid) {
 	    	var parameters = {};
 	    	if (result["type"] == 0x0001 /* TPM_ALG_RSA */ ) {
+				// (at this point assumes TPMS_RSA_PARMS because type has been validated to TPM_ALG_RSA)
+				// see table 12.2.3.5 of https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part2_Structures_pub.pdf
 	    		// read symmetric, scheme, keyBits and exponent
 	    		parameters["symmetric"] = dataview.getUint16(index);
 	    		index += 2;
@@ -1183,6 +1203,18 @@
 	    		if (parameters["exponent"] == 0) {
 	    			parameters["exponent"] = 65537;
 	    		}
+			} else if (result["type"] == 0x0023 /* TPM_ALG_ECC */ ) {
+				// (at this point assumes TPMS_ECC_PARMS because type has been validated to TPM_ALG_ECC)
+				// see table 12.2.3.6 of https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part2_Structures_pub.pdf
+	    		// read symmetric, scheme, curveID and kdf
+	    		parameters["symmetric"] = dataview.getUint16(index);
+	    		index += 2;
+	    		parameters["scheme"] = dataview.getUint16(index);
+	    		index += 2;
+	    		parameters["curveID"] = dataview.getUint16(index);
+	    		index += 2;
+	    		parameters["kdf"] = dataview.getUint16(index);
+	    		index += 2;
 	    	} else {
 	    		// shouldn't get here
 	    		result.valid = false;
@@ -1192,11 +1224,28 @@
 	    }
 	    
 	    // TPMU_PUBLIC_ID unique
+		// see table 12.2.3.2 of https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part2_Structures_pub.pdf
 	    if (result.valid) {
-		    var szBytes = getSizedBytes(dataview, index);
-		    debugLog("szBytes after reading TPMU_PUBLIC_ID: " + JSON.stringify(szBytes));
-		    result["unique"] = szBytes["bytes"];
-		    index = szBytes["nextIndex"];
+			if (result["type"] == 0x0001 /* TPM_ALG_RSA */ ) {
+				// TPM2B_PUBLIC_KEY_RSA
+				var szBytes = getSizedBytes(dataview, index);
+				debugLog("szBytes after reading TPMU_PUBLIC_ID: " + JSON.stringify(szBytes));
+				result["unique"] = szBytes["bytes"];
+				index = szBytes["nextIndex"];
+			} else if (result["type"] == 0x0023 /* TPM_ALG_ECC */) {
+				// TPMS_ECC_POINT (x and y coordinates)
+				result["unique"] = {};
+				var szBytes = getSizedBytes(dataview, index);
+				result["unique"]["x"] = szBytes["bytes"];
+				index = szBytes["nextIndex"];
+				szBytes = getSizedBytes(dataview, index);
+				result["unique"]["y"] = szBytes["bytes"];
+				index = szBytes["nextIndex"];
+			} else {
+	    		// shouldn't get here
+	    		result.valid = false;
+	    		result.error = "Unsupported TPM algorithm type: " + result["type"];
+			}
 	    }
 	    
 	    if (result.valid) {
@@ -1214,6 +1263,7 @@
 	 * Unpack the certInfo bytes from a TPM attestation. Most of the information required
 	 * to do this was found here, which is a little sad because the TPM spec is undecipherable:
 	 * https://github.com/w3c/webauthn/issues/984
+	 * https://medium.com/webauthnworks/verifying-fido-tpm2-0-attestation-fc7243847498
 	 */
 	function unpackCertInfo(certInfoBytes) {
 		var result = { "valid": true, "error": null };
@@ -1500,36 +1550,75 @@
 				var credentialPublicKey = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
 				var credentialPublicKeyObject = coseKeyToPublicKey(credentialPublicKey);
 				
-				// check that both key types are RSA and the algorithms are the same, since that's all we currently support
-				if (!(credentialPublicKeyObject.type == "RSA")) {
+				// RSA and ECC are supported
+				if (credentialPublicKeyObject.type == "RSA") {
+					// check that both key types are RSA and the algorithms are the same
+					if (valid) {
+						if (!(unpackedPublicArea["type"] == 0x01 /* TPM_ALG_RSA */)) {
+							valid = false;
+							result["error"] = "pubArea key type is not TPM_ALG_RSA";
+						}
+					}
+									
+					// check that the exponents match
+					if (valid) {
+						if (credentialPublicKeyObject.e != unpackedPublicArea["parameters"]["exponent"]) {
+							valid = false;
+							result["error"] = "exponent mismatch between pubArea and credentialPublicKey";
+						}
+					}
+					
+					// check that 'n' matches. For some reason credentialPublicKeyObject.n doesn't match??
+					// instead we compare the byte arrays, and that works
+					if (valid) {
+						debugLog("About to compare 'n'");
+						var cpkNBytes = bytesFromArray(credentialPublicKey["-1"],0,-1);
+						var pubAreaNBytes = bytesFromArray(unpackedPublicArea["unique"],0,-1);
+						if (!baEqual(cpkNBytes, pubAreaNBytes)) {
+							valid = false;
+							result["error"] = "RSA 'n' mismatch between pubArea and credentialPublicKey";
+						}
+					}
+
+				} else if (credentialPublicKeyObject.type == "EC") {
+					// check that both key types are ECC and the parameters are the same
+					if (valid) {
+						if (!(unpackedPublicArea["type"] == 0x23 /* TPM_ALG_ECC */)) {
+							valid = false;
+							result["error"] = "pubArea key type is not TPM_ALG_ECC";
+						}
+					}
+
+					if (valid) {
+						// check curveID
+						var coseCurveID = credentialPublicKey["-1"];
+						var pubAreaCurveID = unpackedPublicArea["parameters"]["curveID"];
+						if (!(coseCurveID == tpmECCCurvetoCoseCurve(pubAreaCurveID))) {
+							valid = false;
+							result["error"] = "pubArea curveID does not match attested credential curveID";
+						}
+					}
+
+					if (valid) {
+						// check x and y co-ordinates match
+						var cpkxBytes = bytesFromArray(credentialPublicKey["-2"],0,-1);
+						var cpkyBytes = bytesFromArray(credentialPublicKey["-3"],0,-1);
+						var pubAreaxBytes = unpackedPublicArea["unique"]["x"];
+						var pubAreayBytes = unpackedPublicArea["unique"]["y"];
+						if (!baEqual(cpkxBytes, pubAreaxBytes)) {
+							valid = false;
+							result["error"] = "EC 'x' coordinate mismatch between pubArea and credentialPublicKey";
+						}
+						if (valid) {
+							if (!baEqual(cpkyBytes, pubAreayBytes)) {
+								valid = false;
+								result["error"] = "EC 'y' coordinate mismatch between pubArea and credentialPublicKey";
+							}
+						}
+					}
+				} else {
 					valid = false;
-					result["error"] = "credentialPublicKey in attestedCredData is not an RSA key";
-				}
-				if (valid) {
-					if (!(unpackedPublicArea["type"] == 0x01 /* TPM_ALG_RSA */)) {
-						valid = false;
-						result["error"] = "pubArea key type is not TPM_ALG_RSA";
-					}
-				}
-								
-				// check that the exponents match
-				if (valid) {
-					if (credentialPublicKeyObject.e != unpackedPublicArea["parameters"]["exponent"]) {
-						valid = false;
-						result["error"] = "exponent mismatch between pubArea and credentialPublicKey";
-					}
-				}
-				
-				// check that 'n' matches. For some reason credentialPublicKeyObject.n doesn't match??
-				// instead we compare the byte arrays, and that works
-				if (valid) {
-					debugLog("About to compare 'n'");
-					var cpkNBytes = bytesFromArray(credentialPublicKey["-1"],0,-1);
-					var pubAreaNBytes = bytesFromArray(unpackedPublicArea["unique"],0,-1);
-					if (!baEqual(cpkNBytes, pubAreaNBytes)) {
-						valid = false;
-						result["error"] = "RSA 'n' mismatch between pubArea and credentialPublicKey";
-					}
+					result["error"] = "credentialPublicKey in attestedCredData is not an RSA or EC key";
 				}
 			} else {
 				valid = false;
