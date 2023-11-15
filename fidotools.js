@@ -651,8 +651,9 @@
 		if (s != null) {
 			var pieces = s.split('/');
 			for (var i = 0; i < pieces.length; i++) {
-				var nev = pieces[i].split('=');
-				if (nev != null && nev.length == 2) {
+				var nev = pieces[i].split(/=(.*)/);
+				if (nev != null && nev.length == 3) {
+					// ignore empty string at end of array
 					// make sure we have consistent (upper case) keys
 					result[nev[0].toUpperCase()] = nev[1];
 				}
