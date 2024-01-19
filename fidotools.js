@@ -263,7 +263,7 @@
 		}
 
 		var algMap = {
-				"-7" : "SHA256withRSA",
+				"-7" : "SHA256withECDSA",
 				"-35" : "SHA384withECDSA",
 				"-36" : "SHA512withECDSA",
 				"-37" : "SHA256withRSAandMGF1",
