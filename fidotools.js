@@ -489,7 +489,70 @@
 			}
 		}
 		return result;
-	}		
+	}
+
+	function padToEvenNumberOfHexDigits(s) {
+		let result = s;
+		if (s.length%2 == 1) {
+			result = '0'+s;
+		}
+		return result;
+	}
+
+	function publicKeyToCOSEKey(pk) {
+		// should be one of RSAKey, KJUR.crypto.ECDSA as these are all we support
+		let result = null;
+		try {
+			if (pk instanceof RSAKey) {
+				result = {
+					"1": 3,
+					"3": -257,
+					"-1": b64toBA(hextob64(padToEvenNumberOfHexDigits(pk.n.toString(16)))),
+					"-2": b64toBA(hextob64(padToEvenNumberOfHexDigits(pk.e.toString(16))))
+				};	
+			} else if (pk instanceof KJUR.crypto.ECDSA) {
+				// see table 5: https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
+				const curveNameToAlgID = {
+					"secp256r1": -7, 
+					"secp384r1":  -35,
+					"secp521r1": -36
+				};
+				let alg = (pk.curveName == null ? null : curveNameToAlgID[pk.curveName]);
+				if (alg == null) {
+					throw "Unrecognized ECDSA curve: " + pk.curveName;
+				}
+
+
+				// see Table 22: https://datatracker.ietf.org/doc/html/rfc8152#section-13.1
+				const curveNameToCurveKey = {
+					"secp256r1": 1, 
+					"secp384r1":  2,
+					"secp521r1": 3
+				};
+				let keyID = curveNameToCurveKey[pk.curveName];
+				if (keyID == null) {
+					throw "Unrecognized ECDSA curve: " + pk.curveName;
+				}
+
+				// these keys come from Table 19: https://datatracker.ietf.org/doc/html/rfc8152#section-12.4.1
+				result = {
+					"1": 2,
+					"3": alg,
+					"-1": keyID,
+					"-2": b64toBA(hextob64(pk.getPublicKeyXYHex().x)),
+					"-3": b64toBA(hextob64(pk.getPublicKeyXYHex().y))
+				};
+			} else {
+				throw "Unknown key type";
+			}
+		} catch(e) {
+			console.log("Unsupported public key object: " + pk + " error: " + e);
+		}
+
+		return result;
+	}
+
+
 	function unpackAuthData(authDataBytes) {
 		debugLog("unpackAuthData enter");
 		var result = { 
@@ -2587,6 +2650,7 @@
 		validateAttestationStatement: validateAttestationStatement,
 		aaguidBytesToUUID: aaguidBytesToUUID,
 		coseKeyToPublicKey: coseKeyToPublicKey,
+		publicKeyToCOSEKey: publicKeyToCOSEKey,
 		certToPEM: certToPEM,
 		verifyFIDOSignature: verifyFIDOSignature
 	}

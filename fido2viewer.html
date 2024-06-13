@@ -178,8 +178,8 @@
 			<tr><td>response.userHandle</td><td><input type="text" id="assertionUserHandle" size="120" /></td></tr>
 			<tr><td>getClientExtensionResults</td><td><input type="text" id="assertionGetClientExtensionResults" size="50" value="{}" /></td></tr>
 			<tr />
-			<tr><td colspan="2">If you have the COSE public key for signature validation, paste it below:</td></tr>
-			<tr><td colspan="2"><textarea id="assertionCOSEPublicKeyTextArea" class="dataTextArea" rows="8" cols="50" wrap="off"></textarea></td></tr>
+			<tr><td colspan="2">If you have the public key for signature validation (either PEM, COSE format, or base64(cbor(COSE_key))), paste it below:</td></tr>
+			<tr><td colspan="2"><textarea id="assertionPublicKeyTextArea" class="dataTextArea" rows="8" cols="50" wrap="off"></textarea></td></tr>
 		</table>
 		<input type="button" value="Process Assertion Fields" onclick="processAssertion()" />
 	</div>

@@ -94,7 +94,7 @@ function testAssertion() {
 			testAssertionData[index].value.getClientExtensionResults ? JSON.stringify(testAssertionData[index].value.getClientExtensionResults) : '');
 
 		if (testAssertionData[index].publicKey) {
-			$('#assertionCOSEPublicKeyTextArea').val(myJSONStringify(testAssertionData[index].publicKey));
+			$('#assertionPublicKeyTextArea').val(myJSONStringify(testAssertionData[index].publicKey));
 		}
 
 	} else {
@@ -500,6 +500,37 @@ function appendSignatureCheck(sigBytes, cert, sig, alg) {
 
 }
 
+function publicKeyTextToCOSEKey(keyStr) {
+	// fuzzy logic to interpret the public key as it can be provided in a number of different formats
+	let result = null;
+	try {
+		if (keyStr != null) {
+			if (keyStr.startsWith('{')) {
+				result = JSON.parse(keyStr);
+			} else if (keyStr.indexOf('BEGIN PUBLIC KEY') >= 0) {
+				let pk = KEYUTIL.getKey(keyStr);
+				result = fidotools.publicKeyToCOSEKey(pk);
+			} else {
+				// assume it is base64 or base64url encoding of CBOR of public key
+				let cborBytes = null;
+				// determine if its b64 or b64u
+				if (keyStr.length%4 == 0 && (keyStr.indexOf('+') >= 0 || keyStr.indexOf('/') >= 0 || keyStr.indexOf('=') >= 0)) {
+					cborBytes = b64toBA(keyStr);
+				} else {
+					cborBytes = b64toBA(b64utob64(keyStr));
+				}
+				result = JSON.parse(JSON.stringify(convertArrayBuffersToByteArrays(CBOR.decode(new Uint8Array(cborBytes).buffer))));
+			}
+		}
+	} catch (e) {
+		console.log("Error interpreting public key: " + e);
+		result = null;
+	}
+	console.log("publicKeyTextToCOSEKey returning: " + ((result == null) ? "null" : JSON.stringify(result)));
+
+	return result;
+}
+
 function processAttestation() {
 	var attestationResult = {
 		"id": $('#attestationId').val(),
@@ -542,11 +573,10 @@ function processAssertion() {
 	};
 
 	var coseKey = null;
-	var coseKeyStr = $('#assertionCOSEPublicKeyTextArea').val();
-	if (coseKeyStr != null && coseKeyStr.length > 0) {
-		coseKey = JSON.parse(coseKeyStr);
+	var publicKeyStr = $('#assertionPublicKeyTextArea').val();
+	if (publicKeyStr != null && publicKeyStr.length > 0) {
+		coseKey = publicKeyTextToCOSEKey(publicKeyStr);
 	}
-
 
 	updateMsg('');
 
