@@ -1454,8 +1454,11 @@
 	    var sz = dataview.getUint16(index);
 	    index += 2;
 	    
-	    // now get that many bytes from the dataview
-	    var bytes = bytesFromArray(new Uint8Array(dataview.buffer.slice(index, index + sz)), 0, -1);
+	    // now get that many bytes from the dataview, if any
+	    var bytes = null;
+		if (sz > 0) {
+			bytes = bytesFromArray(new Uint8Array(dataview.buffer.slice(index, index + sz)), 0, -1);
+		}
 	    index += sz; // not really needed becase we're done parsing
 	    
 	    var result = {
@@ -1467,23 +1470,32 @@
 	}
 	
 	function parseTPM2BName(dataview,index) {
-		var szBytes = getSizedBytes(dataview,index);
-		
-		// now parse those bytes to find the digest and handle
-		var nameArrayBuffer = (new Uint8Array(szBytes.bytes)).buffer;
-		
-	    var dataview2 = new DataView(nameArrayBuffer);
-	    var index2 = 0;
-	    var digest = dataview2.getUint16(index2);
-	    index2 += 2;
-	    var handle = bytesFromArray(new Uint8Array(dataview2.buffer.slice(index2)), 0, -1);
-	    
-	    
+
 		var result = {
-			"nextIndex": szBytes.nextIndex,
-			"digest": digest,
-			"handle": handle
+			"nextIndex": 0,
+			"digest": null,
+			"handle": null
 		};
+
+		var szBytes = getSizedBytes(dataview,index);
+		// this gets updated regardless of whether the name is empty
+		result.nextIndex = szBytes.nextIndex;
+
+		if (szBytes.bytes != null && szBytes.bytes.length > 0) {
+			// now parse those bytes to find the digest and handle
+			var nameArrayBuffer = (new Uint8Array(szBytes.bytes)).buffer;
+			
+			var dataview2 = new DataView(nameArrayBuffer);
+			var index2 = 0;
+			var digest = dataview2.getUint16(index2);
+			index2 += 2;
+			var handle = bytesFromArray(new Uint8Array(dataview2.buffer.slice(index2)), 0, -1);
+			
+			
+			result.digest = digest;
+			result.handle = handle;
+		}
+		
 		return result;
 	}
 	
