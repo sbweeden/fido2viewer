@@ -250,7 +250,7 @@ function appendAuthData(ba, id) {
 
 			var nextByte = 37;
 
-			if (attestedCredentialData && id != "apple") {
+			if (attestedCredentialData && id != "apple-appattest") {
 				txt += "\n\n========================\nAttested Credential Data\n========================\n";
 				// are there enough bytes to read AAGUID?
 				if (ba.length < (nextByte + 16)) {
@@ -603,7 +603,7 @@ function processAssertion() {
 		&& coseKey != null) {
 		var sigBytes = b64toBA(b64utob64(assertionResult.response.authenticatorData)).concat(
 			fidotools.sha256(b64toBA(b64utob64(assertionResult.response.clientDataJSON))));
-		if (assertionResult.id == "apple") {
+		if (assertionResult.id == "apple-appattest") {
 			sigBytes = fidotools.sha256(sigBytes);
 		}
 		appendSignatureCheck(
