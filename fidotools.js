@@ -9,7 +9,7 @@
 		/*
 		 * Supported attestation formats
 		 */
-		supportedAttestationFormats: [ "fido-u2f", "packed", "none", "tpm", "android-safetynet", "android-key", "apple" ],
+		supportedAttestationFormats: [ "fido-u2f", "packed", "none", "tpm", "android-safetynet", "android-key", "apple", "apple-appattest" ],
 		
 		/*
 		 * Supported packed attestation signature algorithms
@@ -2641,7 +2641,7 @@
 		} else if (attestationObject["fmt"] == "android-key") {
 			result = validateAttestationStatementAndroidKey(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
-		} else if (attestationObject["fmt"] == "apple") {
+		} else if (attestationObject["fmt"] == "apple" || attestationObject["fmt"] == "apple-appattest") {
 			result = validateAttestationStatementApple(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else {

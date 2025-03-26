@@ -214,8 +214,11 @@ function publicKeyToPEM(pk) {
 
 /*
 * Dumps to details the authenticator data represented by the byte array ba
+*
+* @param id -
+*            if 'apple', then ignore attestedCredentialData AT flag
 */
-function appendAuthData(ba) {
+function appendAuthData(ba, id) {
 	var txt = '';
 	var headingClass = 'dataHeadingSuccess';
 	var txtAreaClass = 'dataTextArea';
@@ -247,7 +250,7 @@ function appendAuthData(ba) {
 
 			var nextByte = 37;
 
-			if (attestedCredentialData) {
+			if (attestedCredentialData && id != "apple-appattest") {
 				txt += "\n\n========================\nAttested Credential Data\n========================\n";
 				// are there enough bytes to read AAGUID?
 				if (ba.length < (nextByte + 16)) {
@@ -442,7 +445,7 @@ function appendAttestationObject(s, clientDataHashBytes) {
 
 	if (!attestationObjectError) {
 		// Show details of the authenticator data
-		appendAuthData(decodedAttestationObject.authData);
+		appendAuthData(decodedAttestationObject.authData, "");
 
 		// If there is an attestation statement, show it also
 		if (decodedAttestationObject["attStmt"] != null) {
@@ -587,7 +590,7 @@ function processAssertion() {
 
 	// Add a pretty-print of the authenticator data
 	if (assertionResult.response.authenticatorData != null && assertionResult.response.authenticatorData.length > 0) {
-		appendAuthData(b64toBA(b64utob64(assertionResult.response.authenticatorData)));
+		appendAuthData(b64toBA(b64utob64(assertionResult.response.authenticatorData)), assertionResult.id);
 	}
 
 	// If we have required fields, do a signature check
@@ -600,6 +603,9 @@ function processAssertion() {
 		&& coseKey != null) {
 		var sigBytes = b64toBA(b64utob64(assertionResult.response.authenticatorData)).concat(
 			fidotools.sha256(b64toBA(b64utob64(assertionResult.response.clientDataJSON))));
+		if (assertionResult.id == "apple-appattest") {
+			sigBytes = fidotools.sha256(sigBytes);
+		}
 		appendSignatureCheck(
 			sigBytes, 
 			coseKey,
