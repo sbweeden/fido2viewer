@@ -511,15 +511,25 @@ function publicKeyTextToCOSEKey(keyStr) {
 				let pk = KEYUTIL.getKey(keyStr);
 				result = fidotools.publicKeyToCOSEKey(pk);
 			} else {
-				// assume it is base64 or base64url encoding of CBOR of public key
-				let cborBytes = null;
+				// assume it is base64 or base64url encoding of either the CBOR of public key, or the public key itself
+				let pkBytes = null;
 				// determine if its b64 or b64u
 				if (keyStr.length%4 == 0 && (keyStr.indexOf('+') >= 0 || keyStr.indexOf('/') >= 0 || keyStr.indexOf('=') >= 0)) {
-					cborBytes = b64toBA(keyStr);
+					pkBytes = b64toBA(keyStr);
 				} else {
-					cborBytes = b64toBA(b64utob64(keyStr));
+					pkBytes = b64toBA(b64utob64(keyStr));
 				}
-				result = JSON.parse(JSON.stringify(convertArrayBuffersToByteArrays(CBOR.decode(new Uint8Array(cborBytes).buffer))));
+				try {
+					// try interpreting as CBOR
+					result = JSON.parse(JSON.stringify(convertArrayBuffersToByteArrays(CBOR.decode(new Uint8Array(pkBytes).buffer))));
+				} catch (e) {
+					// last attempt - try interpreting as public key PEM text just without the BEGIN / END headers
+					let spkStr = "-----BEGIN PUBLIC KEY-----\n" + 
+						hextob64(BAtohex(pkBytes)).match(/.{1,64}/g).join("\n") + "\n" +
+						"-----END PUBLIC KEY-----";
+					let pk = KEYUTIL.getKey(spkStr);
+					result = fidotools.publicKeyToCOSEKey(pk);
+				}
 			}
 		}
 	} catch (e) {
