@@ -131,7 +131,7 @@ function appendClientDataJSON(s) {
 	numLines = (txt.match(/\n/g) || []).length;
 
 	appendMsgRaw('<p class="'+headingClass+'">Client Data JSON</p>' + 
-		'<p>For details see: <a href="https://www.w3.org/TR/webauthn/#dictionary-client-data">https://www.w3.org/TR/webauthn/#dictionary-client-data</a></p>' +
+		'<p>For details see: <a href="https://w3c.github.io/webauthn/#dictionary-client-data">https://w3c.github.io/webauthn/#dictionary-client-data</a></p>' +
 		'<textarea id="cdjTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1) + '" cols="80" readonly="true">' + 
 		txt + 
 		'</textarea><br />');			
@@ -357,7 +357,7 @@ function appendAuthData(ba) {
 	numLines = (txt.match(/\n/g) || []).length;
 
 	appendMsgRaw('<p class="'+headingClass+'">Decoded Authenticator Data</p>' + 
-		'<p>For details see: <a href="https://www.w3.org/TR/webauthn/#sctn-authenticator-data">https://www.w3.org/TR/webauthn/#sctn-authenticator-data</a></p>' +
+		'<p>For details see: <a href="https://w3c.github.io/webauthn/#sctn-authenticator-data">https://w3c.github.io/webauthn/#sctn-authenticator-data</a></p>' +
 		'<textarea id="authDataTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1	) + '" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
@@ -396,7 +396,7 @@ function appendAttestationStatement(decodedAttestationObject, clientDataHashByte
 	numLines = (txt.match(/\n/g) || []).length;
 
 	appendMsgRaw('<p class="'+headingClass+'">Decoded Attestation Statement</p>' + 
-		'<p>For details see: <a href="https://www.w3.org/TR/webauthn/#sctn-defined-attestation-formats">https://www.w3.org/TR/webauthn/#sctn-defined-attestation-formats</a></p>' +
+		'<p>For details see: <a href="https://w3c.github.io/webauthn/#sctn-defined-attestation-formats">https://w3c.github.io/webauthn/#sctn-defined-attestation-formats</a></p>' +
 		'<textarea id="attestationStatementTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1	) + '" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
@@ -435,7 +435,7 @@ function appendAttestationObject(s, clientDataHashBytes) {
 	numLines = (txt.match(/\n/g) || []).length;
 
 	appendMsgRaw('<p class="'+headingClass+'">Decoded Attestation Object</p>' + 
-		'<p>For details see: <a href="https://www.w3.org/TR/webauthn/#sctn-attestation">https://www.w3.org/TR/webauthn/#sctn-attestation</a></p>' +
+		'<p>For details see: <a href="https://w3c.github.io/webauthn/#sctn-attestation">https://w3c.github.io/webauthn/#sctn-attestation</a></p>' +
 		'<textarea id="attestationObjectTextArea" class="' + txtAreaClass + '" rows="'+(numLines+1)+'" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
