@@ -657,5 +657,72 @@ function onLoad() {
 		selectHTML += '<option value="' + i + '">' + testAssertionData[i].label + '</option>';
 	}
 	selectHTML += '</select>';
-	$('#testAssertionSelectDiv').html(selectHTML);			
+	$('#testAssertionSelectDiv').html(selectHTML);
+
+	const attestationJSONTextArea = document.getElementById('attestationJSON');
+
+    attestationJSONTextArea.addEventListener('input', (event) => {
+		let currentText = event.target.value;
+		try {
+			let attestationJSON = JSON.parse(currentText);
+			if (attestationJSON != null) {
+				// populate the form fields from whatever we have read
+				if (attestationJSON.id != null) {
+					$('#attestationId').val(attestationJSON.id);
+				}
+				if (attestationJSON.rawId != null) {
+					$('#attestationRawId').val(attestationJSON.rawId);
+				}
+				if (attestationJSON.response != null) {
+					if (attestationJSON.response.clientDataJSON != null) {
+						$('#attestationClientDataJSON').val(attestationJSON.response.clientDataJSON);
+					}
+					if (attestationJSON.response.attestationObject != null) {
+						$('#attestationAttestationObject').val(attestationJSON.response.attestationObject);
+					}
+				}
+				if (attestationJSON.clientExtensionResults != null) {
+					$('#attestationGetClientExtensionResults').val(JSON.stringify(attestationJSON.clientExtensionResults));
+				}
+			}
+		} catch (e) {
+			// do nothing
+		}
+    });	
+	const assertionJSONTextArea = document.getElementById('assertionJSON');
+
+    assertionJSONTextArea.addEventListener('input', (event) => {
+		let currentText = event.target.value;
+		try {
+			let assertionJSON = JSON.parse(currentText);
+			if (assertionJSON != null) {
+				// populate the form fields from whatever we have read
+				if (assertionJSON.id != null) {
+					$('#assertionId').val(assertionJSON.id);
+				}
+				if (assertionJSON.rawId != null) {
+					$('#assertionRawId').val(assertionJSON.rawId);
+				}
+				if (assertionJSON.response != null) {
+					if (assertionJSON.response.clientDataJSON != null) {
+						$('#assertionClientDataJSON').val(assertionJSON.response.clientDataJSON);
+					}
+					if (assertionJSON.response.authenticatorData != null) {
+						$('#assertionAuthenticatorData').val(assertionJSON.response.authenticatorData);
+					}
+					if (assertionJSON.response.signature != null) {
+						$('#assertionSignature').val(assertionJSON.response.signature);
+					}
+					if (assertionJSON.response.userHandle != null) {
+						$('#assertionUserHandle').val(assertionJSON.response.userHandle);
+					}
+				}
+				if (assertionJSON.clientExtensionResults != null) {
+					$('#assertionGetClientExtensionResults').val(JSON.stringify(assertionJSON.clientExtensionResults));
+				}
+			}
+		} catch (e) {
+			// do nothing
+		}
+    });
 }

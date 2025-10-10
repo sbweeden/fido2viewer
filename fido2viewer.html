@@ -151,6 +151,11 @@
 		<div id="testAttestationSelectDiv"></div>
 		<input type="button" value="Populate test data" onclick="testAttestation()" />
 		<br />
+		<label for="attestationJSON">Attestation raw JSON blob</label><br />
+		<textarea id="attestationJSON" rows="10" cols="100"></textarea>
+		<br />
+		or enter manually:
+		<br />
 		<table id="attestationInputTable" border="0">
 			<tr><td>id</td><td><input type="text" id="attestationId" size="100" /></td></tr>
 			<tr><td>rawId</td><td><input type="text" id="attestationRawId" size="100" /></td></tr>
@@ -160,10 +165,6 @@
 			<tr><td>getClientExtensionResults</td><td><input type="text" id="attestationGetClientExtensionResults" size="50" value="{}" /></td></tr>
 		</table>
 		<br />
-		<label for="attestationJSON">Attestation raw JSON blob</label><br />
-		<textarea id="attestationJSON" rows="10" cols="100"></textarea>
-		<br />
-		<br />
 		<input type="button" value="Process Attestation Fields" onclick="processAttestation()" />
 	</div>
 	<br>
@@ -172,6 +173,11 @@
 		<h3>Input what you have of the assertion payload:</h3>
 		<div id="testAssertionSelectDiv"></div>
 		<input type="button" value="Populate test data" onclick="testAssertion()" />
+		<br />
+		<label for="assertionJSON">Assertion raw JSON blob</label><br />
+		<textarea id="assertionJSON" rows="10" cols="100"></textarea>
+		<br />
+		or enter manually:
 		<br />
 		<table id="assertionInputTable" border="0">
 			<tr><td>id</td><td><input type="text" id="assertionId" size="100" /></td></tr>
@@ -186,10 +192,6 @@
 			<tr><td colspan="2">If you have the public key for signature validation (either PEM, COSE format, or base64(cbor(COSE_key))), paste it below:</td></tr>
 			<tr><td colspan="2"><textarea id="assertionPublicKeyTextArea" class="dataTextArea" rows="8" cols="50" wrap="off"></textarea></td></tr>
 		</table>
-		<br />
-		<label for="assertionJSON">Assertion raw JSON blob</label><br />
-		<textarea id="assertionJSON" rows="10" cols="100"></textarea>
-		<br />
 		<br />
 		<input type="button" value="Process Assertion Fields" onclick="processAssertion()" />
 	</div>
