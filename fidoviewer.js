@@ -542,16 +542,29 @@ function publicKeyTextToCOSEKey(keyStr) {
 }
 
 function processAttestation() {
-	var attestationResult = {
-		"id": $('#attestationId').val(),
-		"rawId": $('#attestationRawId').val(),
-		"type": $('#attestationType').val(),
-		"response": {
-			"clientDataJSON": $('#attestationClientDataJSON').val(),
-			"attestationObject": $('#attestationAttestationObject').val()
-		},
-		"getClientExtensionResults": $('#attestationGetClientExtensionResults').val()
-	};
+	var rawJsonBlob = $('#attestationJSON').val();
+	var attestationResult = null;
+	if (rawJsonBlob == null || rawJsonBlob.length == 0) {
+		// No JSON blob, use the individual table row values
+		attestationResult = {
+			"id": $('#attestationId').val(),
+			"rawId": $('#attestationRawId').val(),
+			"type": $('#attestationType').val(),
+			"response": {
+				"clientDataJSON": $('#attestationClientDataJSON').val(),
+				"attestationObject": $('#attestationAttestationObject').val()
+			},
+			"getClientExtensionResults": $('#attestationGetClientExtensionResults').val()
+		};
+	} else {
+		// Something in the json blob field, attempt to parse it
+		try {
+			attestationResult = JSON.parse(rawJsonBlob);
+		} catch (err) {
+			updateMsg('Error parsing raw JSON');
+			return;
+		}
+	}
 
 	updateMsg('');
 
@@ -569,18 +582,31 @@ function processAttestation() {
 }
 
 function processAssertion() {
-	var assertionResult = {
-		"id": $('#assertionId').val(),
-		"rawId": $('#assertionRawId').val(),
-		"type": $('#assertionType').val(),
-		"response": {
-			"clientDataJSON": $('#assertionClientDataJSON').val(),
-			"authenticatorData": $('#assertionAuthenticatorData').val(),
-			"signature": $('#assertionSignature').val(),
-			"userHandle": $('#assertionUserHandle').val()
-		},
-		"getClientExtensionResults": $('#assertionGetClientExtensionResults').val()
-	};
+	var rawJsonBlob = $('#assertionJSON').val();
+	var assertionResult = null;
+	if (rawJsonBlob == null || rawJsonBlob.length == 0) {
+		// No JSON blob, use the individual table row values
+		assertionResult = {
+			"id": $('#assertionId').val(),
+			"rawId": $('#assertionRawId').val(),
+			"type": $('#assertionType').val(),
+			"response": {
+				"clientDataJSON": $('#assertionClientDataJSON').val(),
+				"authenticatorData": $('#assertionAuthenticatorData').val(),
+				"signature": $('#assertionSignature').val(),
+				"userHandle": $('#assertionUserHandle').val()
+			},
+			"getClientExtensionResults": $('#assertionGetClientExtensionResults').val()
+		};
+	} else {
+		// Something in the json blob field, attempt to parse it
+		try {
+			assertionResult = JSON.parse(rawJsonBlob);
+		} catch (err) {
+			updateMsg('Error parsing raw JSON');
+			return;
+		}
+	}
 
 	var coseKey = null;
 	var publicKeyStr = $('#assertionPublicKeyTextArea').val();
