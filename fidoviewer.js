@@ -426,13 +426,6 @@ async function appendAttestationStatement(decodedAttestationObject, clientDataHa
 		'<textarea id="attestationStatementTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1	) + '" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
-
-	// If the attestation statement validated and is not "None", add the metadata lookup information
-	if (attestationStatementValidationResult != null 
-		&& attestationStatementValidationResult.success 
-		&& attestationStatementValidationResult.attestationType != "None") {
-		appendMetadataLookup(attestationStatementValidationResult);
-	}
 }
 
 /*
@@ -566,14 +559,6 @@ async function processAttestation() {
 				await appendDevicePubKey(authData, clientDataHashBytes, parsedClientExtensions["devicePubKey"]);
 			}
 		}
-	}
-
-
-	// try a complete registration verification process, and display the output
-	var registrationResult = await fidotools.inspectConformanceToolAttestationResult(attestationResult);
-	if (registrationResult != null) {
-		convertArrayBuffersToByteArrays(registrationResult);
-		appendRegistrationResultSummary(registrationResult);
 	}
 }
 
