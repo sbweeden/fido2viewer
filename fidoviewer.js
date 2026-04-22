@@ -215,7 +215,7 @@ function publicKeyToPEM(pk) {
 /*
 * Dumps to details the authenticator data represented by the byte array ba
 */
-function appendAuthData(ba) {
+async function appendAuthData(ba) {
 	var txt = '';
 	var headingClass = 'dataHeadingSuccess';
 	var txtAreaClass = 'dataTextArea';
@@ -304,19 +304,27 @@ function appendAuthData(ba) {
 					txt += "\n";
 					txt += "Credential Public Key (COSE):\n" + myJSONStringify(credentialPublicKey) + "\n";
 
-					var publicKey = fidotools.coseKeyToPublicKey(credentialPublicKey);
-					if (publicKey != null) {
-						if (publicKey instanceof RSAKey) {
+					var publicKeyJWK = await fidotools.coseKeyToJWK(credentialPublicKey);
+					if (publicKeyJWK != null) {
+						if (publicKeyJWK.kty == "RSA") {
 							txt += "Credential Public Key type: RSA\n";
-						} else if (publicKey instanceof KJUR.crypto.ECDSA) {
+						} else if (publicKeyJWK.kty == "EC") {
 							txt += "Credential Public Key type: ECDSA\n";
+						} else if (publicKeyJWK.kty == "OKP" && publicKeyJWK.alg == "Ed25519") {
+							txt += "Credential Public Key type: Ed25519\n";
+						} else if (publicKeyJWK.kty == "AKP" && publicKeyJWK.alg == "ML-DSA-44") {
+							txt += "Credential Public Key type: ML-DSA-44\n";
+						} else if (publicKeyJWK.kty == "AKP" && publicKeyJWK.alg == "ML-DSA-65") {
+							txt += "Credential Public Key type: ML-DSA-65\n";
+						} else if (publicKeyJWK.kty == "AKP" && publicKeyJWK.alg == "ML-DSA-87") {
+							txt += "Credential Public Key type: ML-DSA-87\n";
 						} else {
 							txt += "WARNING: Unable to determine type of public key";
 						}
 						txt += "Credential Public Key (PEM):\n"
-						txt += publicKeyToPEM(publicKey);
+						txt += await fidotools.coseKeyToPEM(credentialPublicKey);
 					} else {
-						txt += "\nWARNING: Unable to convert COSE public key to KJUR public key object\n";
+						txt += "\nWARNING: Unable to process COSE public key\n";
 					}
 
 				} catch (e) {
@@ -366,7 +374,7 @@ function appendAuthData(ba) {
 /*
 * Dumps to details the attestation statement contained within the attestationObject
 */
-function appendAttestationStatement(decodedAttestationObject, clientDataHashBytes) {
+async function appendAttestationStatement(decodedAttestationObject, clientDataHashBytes) {
 	var txt = '';
 	var headingClass = 'dataHeadingSuccess';
 	var txtAreaClass = 'dataTextArea';
@@ -375,7 +383,7 @@ function appendAttestationStatement(decodedAttestationObject, clientDataHashByte
 	var attestationStatementValidationResult = null;
 	try {
 		var unpackedAuthData = fidotools.unpackAuthData(decodedAttestationObject.authData);
-		attestationStatementValidationResult = fidotools.validateAttestationStatement(
+		attestationStatementValidationResult = await fidotools.validateAttestationStatement(
 			decodedAttestationObject,
 			unpackedAuthData,
 			clientDataHashBytes == null ? [] : clientDataHashBytes);
@@ -383,6 +391,24 @@ function appendAttestationStatement(decodedAttestationObject, clientDataHashByte
 		if (attestationStatementValidationResult.success) {
 			txt += 'Attestation Type: ' + attestationStatementValidationResult.attestationType + '\n';
 			txt += 'Attestation Trust Path: ' + myJSONStringify(attestationStatementValidationResult.attestationTrustPath) + '\n';
+
+			// if there is enterprise attestation information, append that
+			if (attestationStatementValidationResult.enterpriseAttestationDetails != null) {
+				let serialNumberString = null;
+				try {
+					if (attestationStatementValidationResult.enterpriseAttestationDetails.serialNumber != null) {
+						serialNumberString = hextoutf8(attestationStatementValidationResult.enterpriseAttestationDetails.serialNumber);
+						// if not all of the characters are printable ASCII, then set it to null
+						serialNumberString = serialNumberString.match(/^[\x20-\x7E]*$/) ? serialNumberString : null;
+					}
+				} catch (e) {
+					serialNumberString = null;
+				}
+				txt += 'Enterprise Attestation Certificate Information: ' + htmlEncode(JSON.stringify(attestationStatementValidationResult.enterpriseAttestationDetails)) + '\n';
+				if (serialNumberString != null) {
+					txt += 'Enterprise Attestation Serial Number string: ' + serialNumberString + '\n';
+				}
+			}
 		} else {
 			throw attestationStatementValidationResult.error;
 		}
@@ -400,6 +426,13 @@ function appendAttestationStatement(decodedAttestationObject, clientDataHashByte
 		'<textarea id="attestationStatementTextArea" class="' + txtAreaClass + '" rows="' + (numLines+1	) + '" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
+
+	// If the attestation statement validated and is not "None", add the metadata lookup information
+	if (attestationStatementValidationResult != null 
+		&& attestationStatementValidationResult.success 
+		&& attestationStatementValidationResult.attestationType != "None") {
+		appendMetadataLookup(attestationStatementValidationResult);
+	}
 }
 
 /*
@@ -407,7 +440,7 @@ function appendAttestationStatement(decodedAttestationObject, clientDataHashByte
 * The clientDataHashBytes are included if known so that any attestation statement
 * signature could be verified.
 */
-function appendAttestationObject(s, clientDataHashBytes) {
+async function appendAttestationObject(s, clientDataHashBytes) {
 	// first just try the b64url and CBOR decoding of the attestation object
 	var attestationObjectError = false;
 
@@ -442,16 +475,16 @@ function appendAttestationObject(s, clientDataHashBytes) {
 
 	if (!attestationObjectError) {
 		// Show details of the authenticator data
-		appendAuthData(decodedAttestationObject.authData);
+		await appendAuthData(decodedAttestationObject.authData);
 
 		// If there is an attestation statement, show it also
 		if (decodedAttestationObject["attStmt"] != null) {
-			appendAttestationStatement(decodedAttestationObject, clientDataHashBytes);
+			await appendAttestationStatement(decodedAttestationObject, clientDataHashBytes);
 		}
 	}
 }
 
-function appendSignatureCheck(sigBytes, cert, sig, alg) {
+async function appendSignatureCheck(sigBytes, cert, sig, alg) {
 
 	var headingClass = 'dataHeadingSuccess';
 	var txtAreaClass = 'dataTextArea';
@@ -464,19 +497,15 @@ function appendSignatureCheck(sigBytes, cert, sig, alg) {
 		txt += fidotools.certToPEM(cert);
 	} else {
 		// assume COSE key format
-		var pk = fidotools.coseKeyToPublicKey(cert);
-		if (pk != null) {
-			txt += publicKeyToPEM(pk);	
-		} else {
-			txt += "Error: Unable to parse COSE key\n";
-		}
+		let pemTxt = await fidotools.coseKeyToPEM(cert);
+		txt += (pemTxt != null ? (pemTxt + "\n") : "Error: Unable to parse COSE key\n");
 	}
 	txt += "Signature: " + BAtohex(sig) + "\n";
 
 	var result = false;
 	var errStr = null;
 	try {
-		result = fidotools.verifyFIDOSignature(sigBytes, cert, sig, alg);
+		result = await fidotools.verifyFIDOSignature(sigBytes, cert, sig, alg);
 	} catch (e) {
 		errStr = exceptionToErrorString(e);
 	}
@@ -497,7 +526,55 @@ function appendSignatureCheck(sigBytes, cert, sig, alg) {
 		'<textarea id="signatureValidationTextArea" class="' + txtAreaClass + '" rows="'+(numLines+1)+'" cols="150" wrap="off" readonly="true">' + 
 		txt + 
 		'</textarea><br />');
+}
 
+async function processAttestation() {
+	var attestationResult = {
+		"id": $('#attestationId').val(),
+		"rawId": $('#attestationRawId').val(),
+		"type": $('#attestationType').val(),
+		"response": {
+			"clientDataJSON": $('#attestationClientDataJSON').val(),
+			"attestationObject": $('#attestationAttestationObject').val()
+		},
+		"getClientExtensionResults": $('#attestationGetClientExtensionResults').val()
+	};
+
+	updateMsg('');
+
+	// Add a pretty-print of the client data json
+	var clientDataHashBytes = null;
+	if (attestationResult.response.clientDataJSON != null && attestationResult.response.clientDataJSON.length > 0) {
+		appendClientDataJSON(attestationResult.response.clientDataJSON);
+		clientDataHashBytes = fidotools.sha256(b64toBA(b64utob64(attestationResult.response.clientDataJSON)));
+	}
+
+	// Add a pretty-print of the attestation object
+	if (attestationResult.response.attestationObject != null && attestationResult.response.attestationObject.length > 0) {
+		await appendAttestationObject(attestationResult.response.attestationObject, clientDataHashBytes);
+
+		// included here because you cannot have DPK without attestation object
+		// if the DPK extension is present, pretty-print what we can about that
+		if (attestationResult.getClientExtensionResults != null && attestationResult.getClientExtensionResults.length > 0) {
+			var parsedClientExtensions = JSON.parse(attestationResult.getClientExtensionResults);
+			if (parsedClientExtensions["devicePubKey"] != null) {
+				// extract authData from attestation object as input to the processing of dpk information
+				var attestationObjectBytes = b64toBA(b64utob64(attestationResult.response.attestationObject));
+				var decodedAttestationObject = CBOR.decode((new Uint8Array(attestationObjectBytes)).buffer);
+				var authData = decodedAttestationObject.authData;
+	
+				await appendDevicePubKey(authData, clientDataHashBytes, parsedClientExtensions["devicePubKey"]);
+			}
+		}
+	}
+
+
+	// try a complete registration verification process, and display the output
+	var registrationResult = await fidotools.inspectConformanceToolAttestationResult(attestationResult);
+	if (registrationResult != null) {
+		convertArrayBuffersToByteArrays(registrationResult);
+		appendRegistrationResultSummary(registrationResult);
+	}
 }
 
 function publicKeyTextToCOSEKey(keyStr) {
@@ -541,72 +618,19 @@ function publicKeyTextToCOSEKey(keyStr) {
 	return result;
 }
 
-function processAttestation() {
-	var rawJsonBlob = $('#attestationJSON').val();
-	var attestationResult = null;
-	if (rawJsonBlob == null || rawJsonBlob.length == 0) {
-		// No JSON blob, use the individual table row values
-		attestationResult = {
-			"id": $('#attestationId').val(),
-			"rawId": $('#attestationRawId').val(),
-			"type": $('#attestationType').val(),
-			"response": {
-				"clientDataJSON": $('#attestationClientDataJSON').val(),
-				"attestationObject": $('#attestationAttestationObject').val()
-			},
-			"getClientExtensionResults": $('#attestationGetClientExtensionResults').val()
-		};
-	} else {
-		// Something in the json blob field, attempt to parse it
-		try {
-			attestationResult = JSON.parse(rawJsonBlob);
-		} catch (err) {
-			updateMsg('Error parsing raw JSON');
-			return;
-		}
-	}
-
-	updateMsg('');
-
-	// Add a pretty-print of the client data json
-	var clientDataHashBytes = null;
-	if (attestationResult.response.clientDataJSON != null && attestationResult.response.clientDataJSON.length > 0) {
-		appendClientDataJSON(attestationResult.response.clientDataJSON);
-		clientDataHashBytes = fidotools.sha256(b64toBA(b64utob64(attestationResult.response.clientDataJSON)));
-	}
-
-	// Add a pretty-print of the attestation object
-	if (attestationResult.response.attestationObject != null && attestationResult.response.attestationObject.length > 0) {
-		appendAttestationObject(attestationResult.response.attestationObject, clientDataHashBytes);
-	}
-}
-
-function processAssertion() {
-	var rawJsonBlob = $('#assertionJSON').val();
-	var assertionResult = null;
-	if (rawJsonBlob == null || rawJsonBlob.length == 0) {
-		// No JSON blob, use the individual table row values
-		assertionResult = {
-			"id": $('#assertionId').val(),
-			"rawId": $('#assertionRawId').val(),
-			"type": $('#assertionType').val(),
-			"response": {
-				"clientDataJSON": $('#assertionClientDataJSON').val(),
-				"authenticatorData": $('#assertionAuthenticatorData').val(),
-				"signature": $('#assertionSignature').val(),
-				"userHandle": $('#assertionUserHandle').val()
-			},
-			"getClientExtensionResults": $('#assertionGetClientExtensionResults').val()
-		};
-	} else {
-		// Something in the json blob field, attempt to parse it
-		try {
-			assertionResult = JSON.parse(rawJsonBlob);
-		} catch (err) {
-			updateMsg('Error parsing raw JSON');
-			return;
-		}
-	}
+async function processAssertion() {
+	var assertionResult = {
+		"id": $('#assertionId').val(),
+		"rawId": $('#assertionRawId').val(),
+		"type": $('#assertionType').val(),
+		"response": {
+			"clientDataJSON": $('#assertionClientDataJSON').val(),
+			"authenticatorData": $('#assertionAuthenticatorData').val(),
+			"signature": $('#assertionSignature').val(),
+			"userHandle": $('#assertionUserHandle').val()
+		},
+		"getClientExtensionResults": $('#assertionGetClientExtensionResults').val()
+	};
 
 	var coseKey = null;
 	var publicKeyStr = $('#assertionPublicKeyTextArea').val();
@@ -614,16 +638,30 @@ function processAssertion() {
 		coseKey = publicKeyTextToCOSEKey(publicKeyStr);
 	}
 
+
 	updateMsg('');
 
 	// Add a pretty-print of the client data json
+	var clientDataHashBytes = null;
 	if (assertionResult.response.clientDataJSON != null && assertionResult.response.clientDataJSON.length > 0) {
 		appendClientDataJSON(assertionResult.response.clientDataJSON);
+		clientDataHashBytes = fidotools.sha256(b64toBA(b64utob64(assertionResult.response.clientDataJSON)));
 	}
 
 	// Add a pretty-print of the authenticator data
 	if (assertionResult.response.authenticatorData != null && assertionResult.response.authenticatorData.length > 0) {
-		appendAuthData(b64toBA(b64utob64(assertionResult.response.authenticatorData)));
+		var authData = b64toBA(b64utob64(assertionResult.response.authenticatorData));
+		await appendAuthData(authData);
+
+		// included here because you cannot have DPK without authData
+		// if DPK information present, process and display it
+		if (assertionResult.getClientExtensionResults != null && assertionResult.getClientExtensionResults.length > 0) {
+			var parsedClientExtensions = JSON.parse(assertionResult.getClientExtensionResults);
+			if (parsedClientExtensions["devicePubKey"] != null) {
+				// extract authData from attestation object as input to the processing of dpk information
+				await appendDevicePubKey(authData, clientDataHashBytes, parsedClientExtensions["devicePubKey"]);
+			}
+		}
 	}
 
 	// If we have required fields, do a signature check
@@ -636,7 +674,7 @@ function processAssertion() {
 		&& coseKey != null) {
 		var sigBytes = b64toBA(b64utob64(assertionResult.response.authenticatorData)).concat(
 			fidotools.sha256(b64toBA(b64utob64(assertionResult.response.clientDataJSON))));
-		appendSignatureCheck(
+		await appendSignatureCheck(
 			sigBytes, 
 			coseKey,
 			b64toBA(b64utob64(assertionResult.response.signature)),
@@ -645,84 +683,88 @@ function processAssertion() {
 }
 
 function onLoad() {
-	var selectHTML = 'Test data set:&nbsp;<select id="testAttestationIndex" name="testAttestationIndex">';
-	for (var i = 0; i < testAttestationData.length; i++) {
-		selectHTML += '<option value="' + i + '">' + testAttestationData[i].label + '</option>';
-	}
-	selectHTML += '</select>';
-	$('#testAttestationSelectDiv').html(selectHTML);
-
-	var selectHTML = 'Test data set:&nbsp;<select id="testAssertionIndex" name="testAssertionIndex">';
-	for (var i = 0; i < testAssertionData.length; i++) {
-		selectHTML += '<option value="' + i + '">' + testAssertionData[i].label + '</option>';
-	}
-	selectHTML += '</select>';
-	$('#testAssertionSelectDiv').html(selectHTML);
-
-	const attestationJSONTextArea = document.getElementById('attestationJSON');
-
-    attestationJSONTextArea.addEventListener('input', (event) => {
-		let currentText = event.target.value;
-		try {
-			let attestationJSON = JSON.parse(currentText);
-			if (attestationJSON != null) {
-				// populate the form fields from whatever we have read
-				if (attestationJSON.id != null) {
-					$('#attestationId').val(attestationJSON.id);
-				}
-				if (attestationJSON.rawId != null) {
-					$('#attestationRawId').val(attestationJSON.rawId);
-				}
-				if (attestationJSON.response != null) {
-					if (attestationJSON.response.clientDataJSON != null) {
-						$('#attestationClientDataJSON').val(attestationJSON.response.clientDataJSON);
-					}
-					if (attestationJSON.response.attestationObject != null) {
-						$('#attestationAttestationObject').val(attestationJSON.response.attestationObject);
-					}
-				}
-				if (attestationJSON.clientExtensionResults != null) {
-					$('#attestationGetClientExtensionResults').val(JSON.stringify(attestationJSON.clientExtensionResults));
-				}
-			}
-		} catch (e) {
-			// do nothing
+	// on-time startup
+	mykeyutil.init().
+	then(() => {
+		var selectHTML = 'Test data set:&nbsp;<select id="testAttestationIndex" name="testAttestationIndex">';
+		for (var i = 0; i < testAttestationData.length; i++) {
+			selectHTML += '<option value="' + i + '">' + testAttestationData[i].label + '</option>';
 		}
-    });	
-	const assertionJSONTextArea = document.getElementById('assertionJSON');
+		selectHTML += '</select>';
+		$('#testAttestationSelectDiv').html(selectHTML);
 
-    assertionJSONTextArea.addEventListener('input', (event) => {
-		let currentText = event.target.value;
-		try {
-			let assertionJSON = JSON.parse(currentText);
-			if (assertionJSON != null) {
-				// populate the form fields from whatever we have read
-				if (assertionJSON.id != null) {
-					$('#assertionId').val(assertionJSON.id);
-				}
-				if (assertionJSON.rawId != null) {
-					$('#assertionRawId').val(assertionJSON.rawId);
-				}
-				if (assertionJSON.response != null) {
-					if (assertionJSON.response.clientDataJSON != null) {
-						$('#assertionClientDataJSON').val(assertionJSON.response.clientDataJSON);
-					}
-					if (assertionJSON.response.authenticatorData != null) {
-						$('#assertionAuthenticatorData').val(assertionJSON.response.authenticatorData);
-					}
-					if (assertionJSON.response.signature != null) {
-						$('#assertionSignature').val(assertionJSON.response.signature);
-					}
-					if (assertionJSON.response.userHandle != null) {
-						$('#assertionUserHandle').val(assertionJSON.response.userHandle);
-					}
-				}
-				if (assertionJSON.clientExtensionResults != null) {
-					$('#assertionGetClientExtensionResults').val(JSON.stringify(assertionJSON.clientExtensionResults));
-				}
-			}
-		} catch (e) {
-			// do nothing
+		var selectHTML = 'Test data set:&nbsp;<select id="testAssertionIndex" name="testAssertionIndex">';
+		for (var i = 0; i < testAssertionData.length; i++) {
+			selectHTML += '<option value="' + i + '">' + testAssertionData[i].label + '</option>';
 		}
-    });
+		selectHTML += '</select>';
+		$('#testAssertionSelectDiv').html(selectHTML);
+
+		const attestationJSONTextArea = document.getElementById('attestationJSON');
+
+		attestationJSONTextArea.addEventListener('input', (event) => {
+			let currentText = event.target.value;
+			try {
+				let attestationJSON = JSON.parse(currentText);
+				if (attestationJSON != null) {
+					// populate the form fields from whatever we have read
+					if (attestationJSON.id != null) {
+						$('#attestationId').val(attestationJSON.id);
+					}
+					if (attestationJSON.rawId != null) {
+						$('#attestationRawId').val(attestationJSON.rawId);
+					}
+					if (attestationJSON.response != null) {
+						if (attestationJSON.response.clientDataJSON != null) {
+							$('#attestationClientDataJSON').val(attestationJSON.response.clientDataJSON);
+						}
+						if (attestationJSON.response.attestationObject != null) {
+							$('#attestationAttestationObject').val(attestationJSON.response.attestationObject);
+						}
+					}
+					if (attestationJSON.clientExtensionResults != null) {
+						$('#attestationGetClientExtensionResults').val(JSON.stringify(attestationJSON.clientExtensionResults));
+					}
+				}
+			} catch (e) {
+				// do nothing
+			}
+		});	
+		const assertionJSONTextArea = document.getElementById('assertionJSON');
+
+		assertionJSONTextArea.addEventListener('input', (event) => {
+			let currentText = event.target.value;
+			try {
+				let assertionJSON = JSON.parse(currentText);
+				if (assertionJSON != null) {
+					// populate the form fields from whatever we have read
+					if (assertionJSON.id != null) {
+						$('#assertionId').val(assertionJSON.id);
+					}
+					if (assertionJSON.rawId != null) {
+						$('#assertionRawId').val(assertionJSON.rawId);
+					}
+					if (assertionJSON.response != null) {
+						if (assertionJSON.response.clientDataJSON != null) {
+							$('#assertionClientDataJSON').val(assertionJSON.response.clientDataJSON);
+						}
+						if (assertionJSON.response.authenticatorData != null) {
+							$('#assertionAuthenticatorData').val(assertionJSON.response.authenticatorData);
+						}
+						if (assertionJSON.response.signature != null) {
+							$('#assertionSignature').val(assertionJSON.response.signature);
+						}
+						if (assertionJSON.response.userHandle != null) {
+							$('#assertionUserHandle').val(assertionJSON.response.userHandle);
+						}
+					}
+					if (assertionJSON.clientExtensionResults != null) {
+						$('#assertionGetClientExtensionResults').val(JSON.stringify(assertionJSON.clientExtensionResults));
+					}
+				}
+			} catch (e) {
+				// do nothing
+			}
+		});	
+	});
 }

@@ -107,6 +107,20 @@
 	}
 	
 	/**
+	 * convert a small array of bytes to a number
+	 */
+	function bytesToNumber(bytes) {
+  		const size = bytes.length;
+  		let x = 0;
+  		for (let i = 0; i < size; i++) {
+    		const byte = bytes[i];
+    		x *= 0x100;
+    		x += byte;
+  		}
+  		return x;
+	}
+
+	/**
 	 * Uses the ASN1 parser to look for a OID in a PEM x509 cert and return it's value as a hex string
 	 */
 	function findCertOIDValueHex(certPEM, oid) {
@@ -237,6 +251,13 @@
 	}
 	
 	/**
+	 * Converts a COSE key into PEM
+	 */
+	async function coseKeyToPEM(coseKey) {
+		return mykeyutil.getPEMPublicKeyFromCOSE(coseKey);
+	}
+
+	/**
 	 * Performs signature validation as needed for FIDO registration and authenticate transactions.
 	 * 
 	 * @param sigBase -
@@ -254,7 +275,7 @@
 	 *            
 	 * @returns true if the signature verified, false otherwise
 	 */
-	function verifyFIDOSignature(sigBase, cert, sig, alg) {
+	async function verifyFIDOSignature(sigBase, cert, sig, alg) {
 		var result = false;
 
 		// default to ECDSA
@@ -262,42 +283,22 @@
 			alg = -7;
 		}
 
-		var algMap = {
-				"-7" : "SHA256withECDSA",
-				"-35" : "SHA384withECDSA",
-				"-36" : "SHA512withECDSA",
-				"-37" : "SHA256withRSAandMGF1",
-				"-38" : "SHA384withRSAandMGF1",
-				"-39" : "SHA512withRSAandMGF1",
-				"-257" : "SHA256withRSA",
-				"-258" : "SHA384withRSA",
-				"-259" : "SHA512withRSA",
-				"-65535" : "SHA1withRSA"
-			};
-
-		var algStr = algMap['' + alg];
-		if (algStr != null) {
-			var verifier = new KJUR.crypto.Signature({
-				"alg" : algStr
-			});
-
-			// find out what kind of public key validation material we have
-			if (Array.isArray(cert)) {
-				// x509 cert bytes, or EC public key bytes, as typically used by
-				// FIDO-U2F
-				verifier.init(certToPEM(cert));
-			} else {
-				// assume COSE key format
-				verifier.init(coseKeyToPublicKey(cert));
-			}
-
-			verifier.updateHex(BAtohex(sigBase));
-			// debugLog("BEFORE: " + result);
-			result = verifier.verify(BAtohex(sig));
-			// debugLog("AFTER: " + result);
+		// find out what kind of public key validation material we have
+		let pubKey = null;
+		if (Array.isArray(cert)) {
+			// x509 cert bytes, or EC public key bytes, as typically used by
+			// FIDO-U2F
+			pubKey = await mykeyutil.getPublicKeyFromCertBytes(cert, alg);
 		} else {
-			debugLog("Unsupported algorithm in verifyFIDOSignature: " + alg);
+			// assume COSE key format
+			pubKey = await mykeyutil.getPublicKeyFromCOSE(cert);
 		}
+
+		result = await mykeyutil.validateSignature(
+			alg, 
+			pubKey,
+			sigBase,
+			sig);
 
 		if (!result) {
 			// some extra debugging to try figure this out later
@@ -365,30 +366,6 @@
 		return result;
 	}
 	
-	function ECDSA256PublicKeyBytesToCoseKey(b) {
-		var result = { "error": "unknown error", "coseKey": null };
-		if (b != null && b.length == 65) {
-			if (b[0] == 0x04) {
-				var xCoordinateBytes = bytesFromArray(b, 1, 33);
-				var yCoordinateBytes = bytesFromArray(b, 33, -1);
-				
-				// see https://tools.ietf.org/html/rfc8152 for all these magic numbers
-				
-				// set kty, alg and crv statically
-				result["coseKey"] = { "1": 2, "3": -7, "-1": 1 };
-				// now the bytes from the x and y co-ordinates
-				result["coseKey"]["-2"] = new Uint8Array(xCoordinateBytes);
-				result["coseKey"]["-3"] = new Uint8Array(yCoordinateBytes);
-				result["error"] = null;			
-			} else {
-				result["error"] = "The provided elyptic curve public key bytes do not start with 0x04";
-			}
-		} else {
-			result["error"] = "The provided elyptic curve public key bytes are of invalid length";
-		}
-		return result;
-	}
-	
 	// see table 6.4 of https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part2_Structures_pub.pdf
 	function tpmECCCurvetoCoseCurve(tpmCurveID) {
 		// default is no match
@@ -406,152 +383,28 @@
 		return result;
 	}
 
-	function coseKeyToPublicKey(k) {
-		var result = null;
-
-		if (k != null) {
-			// see https://tools.ietf.org/html/rfc8152
-			// and https://www.iana.org/assignments/cose/cose.xhtml
-			var kty = k["1"];
-			var alg = k["3"];
-
-			if (kty == 1) {
-				// EdDSA key type
-				validEDAlgs = [ -8 ];
-				if (validEDAlgs.indexOf(alg) >= 0) {
-					var crvMap = {
-							"6" : "Ed25519",
-							"7" : "Ed448"
-						};
-						var crv = crvMap['' + k["-1"]];
-						if (crv != null) {
-							debugLog("No support for EdDSA keys");
-						} else {
-							debugLog("Invalid crv: " + k["-1"] + " for ED key type");
-						}
-
-				} else {
-					debugLog("Invalid alg: " + alg + " for ED key type");
-				}
-			} else if (kty == 2) {
-				// EC key type
-				validECAlgs = [ -7, -35, -36 ];
-
-				if (validECAlgs.indexOf(alg) >= 0) {
-					var crvMap = {
-						"1" : "P-256",
-						"2" : "P-384",
-						"3" : "P-521" // this is not a typo. It is 521
-					};
-					var crv = crvMap['' + k["-1"]];
-					if (crv != null) {
-						// ECDSA
-						var xCoordinate = bytesFromArray(k["-2"], 0, -1);
-						var yCoordinate = bytesFromArray(k["-3"], 0, -1);
-
-						if (xCoordinate != null && xCoordinate.length > 0
-								&& yCoordinate != null && yCoordinate.length > 0) {
-							result = KEYUTIL.getKey({
-								"kty" : "EC",
-								"crv" : crv,
-								"x" : hextob64(BAtohex(xCoordinate)),
-								"y" : hextob64(BAtohex(yCoordinate))
-							});
-						} else {
-							debugLog("Invalid x or y co-ordinates for EC key type");
-						}
-					} else {
-						debugLog("Invalid crv: " + k["-1"] + " for EC key type");
-					}
-				} else {
-					debugLog("Invalid alg: " + alg + " for EC key type");
-				}
-			} else if (kty == 3) {
-				// RSA key type
-				validRSAAlgs = [ -37, -38, -39, -257, -258, -259, -65535 ];
-				if (validRSAAlgs.indexOf(alg) >= 0) {
-					var n = bytesFromArray(k["-1"], 0, -1);
-					var e = bytesFromArray(k["-2"], 0, -1);
-					if (n != null && n.length > 0 && e != null && e.length > 0) {
-						result = KEYUTIL.getKey({
-							"kty" : "RSA",
-							"n" : hextob64(BAtohex(n)),
-							"e" : hextob64(BAtohex(e))
-						});
-					} else {
-						debugLog("Invalid n or e values for RSA key type");
-					}
-				} else {
-					debugLog("Invalid alg: " + alg + " for RSA key type");
-				}
-			} else {
-				debugLog("Unsupported key type: " + kty);
-			}
-		}
-		return result;
+	async function coseKeyToJWK(k) {
+		return await mykeyutil.getJWKPublicKeyFromCOSE(k);
 	}
 
-	function padToEvenNumberOfHexDigits(s) {
-		let result = s;
-		if (s.length%2 == 1) {
-			result = '0'+s;
-		}
-		return result;
-	}
-
-	function publicKeyToCOSEKey(pk) {
-		// should be one of RSAKey, KJUR.crypto.ECDSA as these are all we support
+	function publicKeyPEMBytesToCOSEKey(pemBytes) {
 		let result = null;
-		try {
-			if (pk instanceof RSAKey) {
-				result = {
-					"1": 3,
-					"3": -257,
-					"-1": b64toBA(hextob64(padToEvenNumberOfHexDigits(pk.n.toString(16)))),
-					"-2": b64toBA(hextob64(padToEvenNumberOfHexDigits(pk.e.toString(16))))
-				};	
-			} else if (pk instanceof KJUR.crypto.ECDSA) {
-				// see table 5: https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-				const curveNameToAlgID = {
-					"secp256r1": -7, 
-					"secp384r1":  -35,
-					"secp521r1": -36
-				};
-				let alg = (pk.curveName == null ? null : curveNameToAlgID[pk.curveName]);
-				if (alg == null) {
-					throw "Unrecognized ECDSA curve: " + pk.curveName;
-				}
+		let parsedPublicKey = mycertutil.parsePublicKeyBytes(pemBytes);
+		if (parsedPublicKey != null && parsedPublicKey.subjectPublicKey != null && parsedPublicKey.subjectPublicKey.coseKey != null) {
+			result = parsedPublicKey.subjectPublicKey.coseKey;
+		}
 
-
-				// see Table 22: https://datatracker.ietf.org/doc/html/rfc8152#section-13.1
-				const curveNameToCurveKey = {
-					"secp256r1": 1, 
-					"secp384r1":  2,
-					"secp521r1": 3
-				};
-				let keyID = curveNameToCurveKey[pk.curveName];
-				if (keyID == null) {
-					throw "Unrecognized ECDSA curve: " + pk.curveName;
-				}
-
-				// these keys come from Table 19: https://datatracker.ietf.org/doc/html/rfc8152#section-12.4.1
-				result = {
-					"1": 2,
-					"3": alg,
-					"-1": keyID,
-					"-2": b64toBA(hextob64(pk.getPublicKeyXYHex().x)),
-					"-3": b64toBA(hextob64(pk.getPublicKeyXYHex().y))
-				};
-			} else {
-				throw "Unknown key type";
-			}
-		} catch(e) {
-			console.log("Unsupported public key object: " + pk + " error: " + e);
+		//
+		// now perhaps one final default to set. If the COSE key was an RSA key, then the alg is unknown, and
+		// we are going to need to set one so that signature verification with this key can be done. We default
+		// to RS256 (-257) as that is the only use of RSA credential public keys that we have seen in the wild.
+		//
+		if (result["1"] == 3 && result["3"] == null) {
+			result["3"] = -257;
 		}
 
 		return result;
 	}
-
 
 	function unpackAuthData(authDataBytes) {
 		debugLog("unpackAuthData enter");
@@ -733,11 +586,7 @@
 		try {
 			var x509Cert = new X509();
 			x509Cert.readCertHex(BAtohex(certBytes));
-			
-			// SHANE
-			debugLog("The attestation certificate is:");
-			debugLog(certToPEM(certBytes));
-	
+				
 			// check cert version
 			result = (x509Cert.getVersion() == 3);
 			if (!result) {
@@ -829,6 +678,35 @@
 						+ result);
 		return result;
 	}
+
+	function getEnterpriseAttestationExtensions(certBytes) {
+		var result = null;
+		debugLog("getEnterpriseAttestationExtensions enter");
+	
+		// https://w3c.github.io/webauthn/#sctn-enterprise-packed-attestation-cert-requirements
+		try {
+			var x509Cert = new X509();
+			x509Cert.readCertHex(BAtohex(certBytes));
+
+			// OID 1.3.6.1.4.1.45724.1.1.2 ( id-fido-gen-ce-sernum ) 
+			var oidInfo = x509Cert.getExtInfo("1.3.6.1.4.1.45724.1.1.2");
+			if (oidInfo != null) {
+				if (oidInfo.critical) {
+					// this is invalid
+					debugLog("Error: enterprise attestation serial number oid is present but incorrectly marked critical");
+				}
+				let serialNumber = ASN1HEX.getV(BAtohex(certBytes), oidInfo.vidx);
+				result = {
+					serialNumber: serialNumber
+				}
+			}
+		} catch (e) {
+			debugLog("getEnterpriseAttestationExtensions error parsing x509 certificate: "
+					+ e);
+			result = null;
+		}
+		return result;
+	}	
 	
 	function verifyTPMAttestationCertificateRequirements(certBytes) {
 		var result = true;
@@ -900,7 +778,7 @@
 		return packedAttestationOIDCheck(x5cBytes, unpackedAuthData);
 	}
 	
-	function validateAttestationStatementFIDOU2F(attestationObject,
+	async function validateAttestationStatementFIDOU2F(attestationObject,
 			unpackedAuthData, clientDataHashBytes) {
 		debugLog("validateAttestationStatementFIDOU2F enter");
 		var result = {
@@ -993,7 +871,7 @@
 															credentialId, publicKeyU2F);
 				
 													// finally, let's verify the signature
-													result.success = verifyFIDOSignature(
+													result.success = await verifyFIDOSignature(
 															verificationData, attCert,
 															attStmtSigBytes, null);
 				
@@ -1046,7 +924,7 @@
 		return result;
 	}
 	
-	function validateAttestationStatementPacked(attestationObject,
+	async function validateAttestationStatementPacked(attestationObject,
 			unpackedAuthData, clientDataHashBytes) {
 		debugLog("validateAttestationStatementPacked enter");
 		var result = {
@@ -1101,7 +979,8 @@
 								var verificationData = unpackedAuthData["rawBytes"]
 										.concat(clientDataHashBytes);
 								debugLog("about to perform ECDSA signature check");
-								if (verifyFIDOSignature(verificationData, x5c[0], sig, alg)) {
+								let sigResult = await verifyFIDOSignature(verificationData, x5c[0], sig, alg);
+								if (sigResult) {
 									debugLog("ECDSA signature check OK!");
 									// verify x5c requirements per
 									// https://www.w3.org/TR/webauthn/#packed-attestation-cert-requirements
@@ -1118,6 +997,9 @@
 											// unpackedAuthData["attestedCredData"]["credentialPublicKey"]
 											//
 											var credentialPublicKey = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
+
+											// these may or may not be present
+											let enterpriseAttestationDetails = getEnterpriseAttestationExtensions(x5c[0]);
 											
 											// done!
 											result["success"] = true;
@@ -1128,6 +1010,11 @@
 											result["credentialPublicKey"] = credentialPublicKey;
 											result["format"] = attestationObject["fmt"];
 											result["error"] = null;
+
+											// optional
+											if (enterpriseAttestationDetails != null) {
+												result["enterpriseAttestationDetails"] = enterpriseAttestationDetails;
+											}
 										} else {
 											result["error"] = "packed attestation certificate did not oid check";
 										}
@@ -1163,7 +1050,8 @@
 									if (clientDataHashBytes != null && clientDataHashBytes.length > 0) {
 										var verificationData = unpackedAuthData["rawBytes"]
 												.concat(clientDataHashBytes);
-										if (verifyFIDOSignature(verificationData, credentialPublicKey, sig, alg)) {
+										let sigResult = await verifyFIDOSignature(verificationData, credentialPublicKey, sig, alg);
+										if (sigResult) {
 
 											// all ok
 											result["success"] = true;
@@ -1499,7 +1387,7 @@
 		return result;
 	}
 	
-	function validateAttestationStatementTPM(attestationObject, unpackedAuthData, clientDataHashBytes) {
+	async function validateAttestationStatementTPM(attestationObject, unpackedAuthData, clientDataHashBytes) {
 		debugLog("validateAttestationStatementTPM enter");
 		var result = {
 			"success" : false,
@@ -1624,10 +1512,10 @@
 
 			if (unpackedPublicArea.valid) {
 				var credentialPublicKey = unpackedAuthData["attestedCredData"]["credentialPublicKey"];
-				var credentialPublicKeyObject = coseKeyToPublicKey(credentialPublicKey);
+				var credentialPublicKeyJWK = await coseKeyToJWK(credentialPublicKey);
 				
 				// RSA and ECC are supported
-				if (credentialPublicKeyObject.type == "RSA") {
+				if (credentialPublicKeyJWK.kty == "RSA") {
 					// check that both key types are RSA and the algorithms are the same
 					if (valid) {
 						if (!(unpackedPublicArea["type"] == 0x01 /* TPM_ALG_RSA */)) {
@@ -1638,16 +1526,14 @@
 									
 					// check that the exponents match
 					if (valid) {
-						if (credentialPublicKeyObject.e != unpackedPublicArea["parameters"]["exponent"]) {
+						if (bytesToNumber(b64toBA(b64utob64(credentialPublicKeyJWK.e))) != unpackedPublicArea["parameters"]["exponent"]) {
 							valid = false;
 							result["error"] = "exponent mismatch between pubArea and credentialPublicKey";
 						}
 					}
 					
-					// check that 'n' matches. For some reason credentialPublicKeyObject.n doesn't match??
-					// instead we compare the byte arrays, and that works
+					// check that 'n' matches. 
 					if (valid) {
-						debugLog("About to compare 'n'");
 						var cpkNBytes = bytesFromArray(credentialPublicKey["-1"],0,-1);
 						var pubAreaNBytes = bytesFromArray(unpackedPublicArea["unique"],0,-1);
 						if (!baEqual(cpkNBytes, pubAreaNBytes)) {
@@ -1656,7 +1542,7 @@
 						}
 					}
 
-				} else if (credentialPublicKeyObject.type == "EC") {
+				} else if (credentialPublicKeyJWK.kty == "EC") {
 					// check that both key types are ECC and the parameters are the same
 					if (valid) {
 						if (!(unpackedPublicArea["type"] == 0x23 /* TPM_ALG_ECC */)) {
@@ -1782,7 +1668,8 @@
 				// in x5c with the algorithm specified in alg
 				var attStmtSigBytes = bytesFromArray(sig, 0, -1);
 				
-				if (!verifyFIDOSignature(unpackedCertInfo["rawBytes"], x5c[0], attStmtSigBytes, alg)) {
+				let sigResult = await verifyFIDOSignature(unpackedCertInfo["rawBytes"], x5c[0], attStmtSigBytes, alg);
+				if (!sigResult) {
 					valid = false;
 					result["error"] = "Signature validation of certInfo bytes failed";
 				}
@@ -2227,7 +2114,7 @@
 		return result;
 	}
 		
-	function validateAttestationStatementAndroidKey(attestationObject, unpackedAuthData, clientDataHashBytes) {
+	async function validateAttestationStatementAndroidKey(attestationObject, unpackedAuthData, clientDataHashBytes) {
 		debugLog("validateAttestationStatementAndroidKey enter");
 		var result = {
 			"success" : false,
@@ -2288,7 +2175,8 @@
 		if (valid) {
 			if (alg == -7) {
 				var verificationData = unpackedAuthData["rawBytes"].concat(clientDataHashBytes);
-				if (verifyFIDOSignature(verificationData, x5c[0], sig, alg)) {
+				let sigResult = await verifyFIDOSignature(verificationData, x5c[0], sig, alg);
+				if (sigResult) {
 					debugLog("Signature check OK!");
 				} else {
 					valid = false;
@@ -2305,20 +2193,22 @@
 		var attestationCertPEM = null;
 		if (valid) {
 			attestationCertPEM = certToPEM(x5c[0]);
-			var attestationCert = new X509();
-			attestationCert.readCertPEM(attestationCertPEM);
-			var certPublicKey = attestationCert.getPublicKey();
-			var attestedPublicKey = coseKeyToPublicKey(unpackedAuthData["attestedCredData"]["credentialPublicKey"]);
-			
+
+			// get hex of public key from x5c[0] - we assume this is ES256
+			let x50PublicKeyHex = await mykeyutil.getPublicKeyHex(await mykeyutil.getPublicKeyFromCertBytes(x5c[0], -7));
+
+			// get hex of public key from attestedCredentialData
+			let attestedCredDataPublicKeyHex = await mykeyutil.getPublicKeyHex(
+				await mykeyutil.getPublicKeyFromCOSE(convertArrayBuffersToByteArrays(unpackedAuthData["attestedCredData"]["credentialPublicKey"])));
+
+
 			// are these keys the same, and not null?
-			if (!(certPublicKey != null && certPublicKey["pubKeyHex"] != null && 
-					attestedPublicKey != null && attestedPublicKey["pubKeyHex"] &&
-					certPublicKey["pubKeyHex"] == attestedPublicKey["pubKeyHex"])) {
+			if (!(x50PublicKeyHex != null && attestedCredDataPublicKeyHex != null && x50PublicKeyHex == attestedCredDataPublicKeyHex)) {
 				valid = false;
 				result["error"] = "Public key in the first certificate in x5c does not match the credentialPublicKey in the attestedCredentialData";
 			}
 		}
-		
+
 		// Verify that in the attestation certificate extension data....
 		var androidKeyAttestation = null;
 		if (valid) {
@@ -2468,7 +2358,7 @@
 		return result;
 	}
 
-	function validateAttestationStatementApple(attestationObject,
+	async function validateAttestationStatementApple(attestationObject,
 			unpackedAuthData, clientDataHashBytes) {
 		debugLog("validateAttestationStatementApple enter");
 		let result = {
@@ -2576,14 +2466,16 @@
 		// credentialPublicKey in the attestedCredentialData in authenticatorData.
 		if (valid) {
 			debugLog("Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.");
-			let attestationCert = new X509();
-			attestationCert.readCertPEM(attestationCertPEM);
-			let certPublicKey = attestationCert.getPublicKey();
-			let attestedPublicKey = coseKeyToPublicKey(unpackedAuthData["attestedCredData"]["credentialPublicKey"]);
+			// get hex of public key from x5c[0] - we assume this is ES256
+			let x50PublicKeyHex = await mykeyutil.getPublicKeyHex(await mykeyutil.getPublicKeyFromCertBytes(x5c[0], -7));
+
+			// get hex of public key from attestedCredentialData
+			let attestedCredDataPublicKeyHex = await mykeyutil.getPublicKeyHex(
+				await mykeyutil.getPublicKeyFromCOSE(convertArrayBuffersToByteArrays(unpackedAuthData["attestedCredData"]["credentialPublicKey"])));
+
 
 			// are these keys the same, and not null?
-			if (!(certPublicKey != null && certPublicKey["pubKeyHex"] != null
-					&& attestedPublicKey != null && attestedPublicKey["pubKeyHex"] && certPublicKey["pubKeyHex"] == attestedPublicKey["pubKeyHex"])) {
+			if (!(x50PublicKeyHex != null && attestedCredDataPublicKeyHex != null && x50PublicKeyHex == attestedCredDataPublicKeyHex)) {
 				valid = false;
 				result["error"] = "Public key in the first certificate in x5c does not match the credentialPublicKey in the attestedCredentialData";
 			}
@@ -2613,7 +2505,7 @@
 	 * 
 	 * @param attestationObject
 	 */
-	function validateAttestationStatement(attestationObject, unpackedAuthData,
+	async function validateAttestationStatement(attestationObject, unpackedAuthData,
 			clientDataHashBytes) {
 		debugLog("validateAttestationStatement enter");
 		var result = {
@@ -2624,10 +2516,10 @@
 			"error" : "Unknown Error validating Attestation Statement"
 		};
 		if (attestationObject["fmt"] == "fido-u2f") {
-			result = validateAttestationStatementFIDOU2F(attestationObject,
+			result = await validateAttestationStatementFIDOU2F(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else if (attestationObject["fmt"] == "packed") {
-			result = validateAttestationStatementPacked(attestationObject,
+			result = await validateAttestationStatementPacked(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else if (attestationObject["fmt"] == "none") {
 			result = validateAttestationStatementNone(attestationObject,
@@ -2642,7 +2534,7 @@
 			result = validateAttestationStatementAndroidKey(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else if (attestationObject["fmt"] == "apple") {
-			result = validateAttestationStatementApple(attestationObject,
+			result = await validateAttestationStatementApple(attestationObject,
 					unpackedAuthData, clientDataHashBytes);
 		} else {
 			result["error"] = "No implementation yet for validation of attestation format: "
@@ -2661,9 +2553,10 @@
 		unpackAuthData: unpackAuthData,
 		validateAttestationStatement: validateAttestationStatement,
 		aaguidBytesToUUID: aaguidBytesToUUID,
-		coseKeyToPublicKey: coseKeyToPublicKey,
-		publicKeyToCOSEKey: publicKeyToCOSEKey,
+		coseKeyToJWK: coseKeyToJWK,
+		publicKeyPEMBytesToCOSEKey: publicKeyPEMBytesToCOSEKey,
 		certToPEM: certToPEM,
+		coseKeyToPEM: coseKeyToPEM,
 		verifyFIDOSignature: verifyFIDOSignature
 	}
 })(this);
